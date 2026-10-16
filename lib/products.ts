@@ -1,0 +1,82 @@
+export type Variant = { label: string; price: number; mrp: number };
+export type Product = {
+  slug: string;
+  name: string;
+  category: string;
+  group: "dry-fruits" | "nuts-seeds" | "dates-figs" | "gift-hampers";
+  image: string;
+  rating: number;
+  reviews: number;
+  badge?: "Best Seller" | "New Arrival";
+  inStock: boolean;
+  description: string;
+  highlights: string[];
+  variants: Variant[];
+  added: number;
+  metaTitle?: string;
+  metaDescription?: string;
+};
+
+const v = (base: number, mrp: number): Variant[] => [
+  { label: "250 g", price: base, mrp },
+  { label: "500 g", price: Math.round(base * 1.9), mrp: Math.round(mrp * 1.9) },
+  { label: "1 kg", price: Math.round(base * 3.6), mrp: Math.round(mrp * 3.6) },
+];
+
+export const categories = [
+  { slug: "almonds", name: "Almonds", image: "/images/almonds.jpg" },
+  { slug: "cashews", name: "Cashews", image: "/images/cashews.jpg" },
+  { slug: "pistachios", name: "Pistachios", image: "/images/pistachios.jpg" },
+  { slug: "walnuts", name: "Walnuts", image: "/images/walnuts.jpg" },
+  { slug: "dates", name: "Dates", image: "/images/dates.jpg" },
+  { slug: "figs", name: "Figs", image: "/images/figs.jpg" },
+  { slug: "raisins", name: "Raisins", image: "/images/raisins.jpg" },
+  { slug: "mixed", name: "Mixed Dry Fruits", image: "/images/mixed.jpg" },
+  { slug: "seeds", name: "Seeds & Snacks", image: "/images/seeds.jpg" },
+  { slug: "gift-hampers", name: "Gift Hampers", image: "/images/gift.jpg" },
+];
+
+// Demo catalogue — replace with real data from your store backend later.
+export const products: Product[] = [
+  { slug: "premium-almonds", name: "Premium California Almonds", category: "almonds", group: "dry-fruits", image: "/images/almonds.jpg", rating: 4.8, reviews: 214, badge: "Best Seller", inStock: true, added: 3,
+    description: "Crunchy, naturally sweet almonds, carefully selected for size and taste. Perfect for soaking, snacking or festive sweets.",
+    highlights: ["Hand-sorted kernels", "Rich, buttery crunch", "Great soaked overnight"], variants: v(349, 420) },
+  { slug: "jumbo-cashews", name: "Jumbo W240 Cashews", category: "cashews", group: "dry-fruits", image: "/images/cashews.jpg", rating: 4.9, reviews: 188, badge: "Best Seller", inStock: true, added: 4,
+    description: "Large, creamy whole cashews with a delicate sweetness. A favourite for gifting and rich curries.",
+    highlights: ["Whole jumbo grade", "Creamy texture", "Ideal for gravies & sweets"], variants: v(399, 480) },
+  { slug: "california-pistachios", name: "Roasted Salted Pistachios", category: "pistachios", group: "nuts-seeds", image: "/images/pistachios.jpg", rating: 4.7, reviews: 156, inStock: true, added: 6,
+    description: "Lightly roasted and salted in-shell pistachios — the perfect evening snack.",
+    highlights: ["Lightly salted", "Easy-open shells", "Roasted in small batches"], variants: v(459, 540) },
+  { slug: "kashmiri-walnuts", name: "Kashmiri Walnut Kernels", category: "walnuts", group: "nuts-seeds", image: "/images/walnuts.jpg", rating: 4.6, reviews: 97, badge: "New Arrival", inStock: true, added: 9,
+    description: "Light-coloured walnut halves from Kashmir with a mild, earthy flavour.",
+    highlights: ["Light halves", "Mild & fresh taste", "Great in baking"], variants: v(429, 499) },
+  { slug: "premium-anjeer", name: "Premium Afghan Anjeer", category: "figs", group: "dates-figs", image: "/images/figs.jpg", rating: 4.7, reviews: 76, inStock: true, added: 5,
+    description: "Soft, chewy dried figs with natural honeyed sweetness.",
+    highlights: ["Soft & chewy", "Naturally sweet", "Rich in fibre"], variants: v(499, 580) },
+  { slug: "arabian-dates", name: "Arabian Medjool Dates", category: "dates", group: "dates-figs", image: "/images/dates.jpg", rating: 4.8, reviews: 132, badge: "Best Seller", inStock: true, added: 2,
+    description: "Plump, glossy Medjool dates with a caramel-like taste.",
+    highlights: ["Large & juicy", "Caramel sweetness", "Perfect for iftar & gifting"], variants: v(379, 450) },
+  { slug: "golden-raisins", name: "Golden Raisins", category: "raisins", group: "dry-fruits", image: "/images/raisins.jpg", rating: 4.5, reviews: 64, inStock: true, added: 1,
+    description: "Bright, tangy-sweet golden raisins for snacking, kheer and baking.",
+    highlights: ["Seedless", "Tangy-sweet", "Kitchen staple"], variants: v(189, 230) },
+  { slug: "mixed-dry-fruit-combo", name: "Royal Mixed Dry Fruit Combo", category: "mixed", group: "dry-fruits", image: "/images/mixed.jpg", rating: 4.7, reviews: 109, badge: "New Arrival", inStock: true, added: 10,
+    description: "A balanced mix of almonds, cashews, pistachios, walnuts and raisins.",
+    highlights: ["Five-fruit mix", "Everyday nutrition", "Resealable pack"], variants: v(399, 470) },
+  { slug: "seed-mix", name: "Super Seeds Mix", category: "seeds", group: "nuts-seeds", image: "/images/seeds.jpg", rating: 4.4, reviews: 41, inStock: false, added: 7,
+    description: "Pumpkin, sunflower, chia and flax seeds — sprinkle on smoothies and salads.",
+    highlights: ["Four-seed blend", "Smoothie & salad topper", "Unsalted"], variants: v(249, 299) },
+  { slug: "premium-gift-box", name: "Signature Dry Fruit Gift Box", category: "gift-hampers", group: "gift-hampers", image: "/images/gift.jpg", rating: 4.9, reviews: 58, badge: "Best Seller", inStock: true, added: 8,
+    description: "Almonds, cashews, pistachios and dates in an elegant gold-accented keepsake box.",
+    highlights: ["Four premium varieties", "Gold-foil keepsake box", "Ideal for festivals & corporate gifting"],
+    variants: [{ label: "Classic (800 g)", price: 1499, mrp: 1799 }, { label: "Grand (1.2 kg)", price: 2199, mrp: 2599 }] },
+];
+
+export const groups: Record<string, string> = {
+  "dry-fruits": "Dry Fruits",
+  "nuts-seeds": "Nuts & Seeds",
+  "dates-figs": "Dates & Figs",
+  "gift-hampers": "Gift Hampers",
+};
+
+export const inr = (n: number) => "₹" + n.toLocaleString("en-IN");
+export const getProduct = (slug: string) => products.find((p) => p.slug === slug);
