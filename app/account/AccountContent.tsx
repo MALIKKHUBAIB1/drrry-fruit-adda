@@ -2,13 +2,31 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
-import { Heart, KeyRound, LogOut, Mail, MapPin, Package, Pencil, ShoppingBag, User as UserIcon, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  CheckCircle2,
+  ChevronDown,
+  Heart,
+  KeyRound,
+  LogOut,
+  Mail,
+  MapPin,
+  Package,
+  Pencil,
+  Plus,
+  ShoppingBag,
+  Trash2,
+  Truck,
+  User as UserIcon,
+  X,
+} from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useStore } from "@/lib/store";
 import { inr } from "@/lib/products";
 import { api, type ApiOrder } from "@/lib/api";
 import { useOrderStream } from "@/lib/useOrderStream";
+import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 type Address = {
   id: string;
@@ -23,14 +41,51 @@ type Address = {
 };
 
 const inputCls =
-  "mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-gold";
+  "w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-gold";
+
+const emptyAddr = {
+  label: "Home",
+  name: "",
+  phone: "",
+  address: "",
+  city: "",
+  state: "",
+  pin: "",
+};
+
+const TABS = [
+  { id: "overview", label: "Overview", Icon: UserIcon },
+  { id: "orders", label: "My Orders", Icon: Package },
+  { id: "addresses", label: "Addresses", Icon: MapPin },
+  { id: "profile", label: "Profile & Security", Icon: KeyRound },
+] as const;
+
+type TabId = (typeof TABS)[number]["id"];
+
+const STATUS_STYLE: Record<string, string> = {
+  delivered: "bg-green-100 text-green-800",
+  cancelled: "bg-destructive/10 text-destructive",
+  packed: "bg-blue-100 text-blue-800",
+  shipped: "bg-purple-100 text-purple-800",
+  "out-for-delivery": "bg-amber-100 text-amber-800",
+  placed: "bg-gold/20 text-cocoa",
+};
+
+const labelStatus = (s: string) =>
+  s === "out-for-delivery"
+    ? "Out for Delivery"
+    : s.charAt(0).toUpperCase() + s.slice(1);
 
 export default function AccountContent() {
   const { user, logout, refresh } = useAuth();
   const { count, wishlist } = useStore();
   const router = useRouter();
+
+  const [tab, setTab] = useState<TabId>("overview");
   const [orders, setOrders] = useState<ApiOrder[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
+  const [orderFilter, setOrderFilter] = useState("all");
+  const [openOrder, setOpenOrder] = useState<string | null>(null);
   const [addresses, setAddresses] = useState<Address[]>([]);
 
   const [editName, setEditName] = useState(false);
@@ -42,6 +97,11 @@ export default function AccountContent() {
   const [next, setNext] = useState("");
   const [passMsg, setPassMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
+  const [addrForm, setAddrForm] = useState({ ...emptyAddr });
+  const [addrOpen, setAddrOpen] = useState(false);
+  const [addrBusy, setAddrBusy] = useState(false);
+  const [addrErr, setAddrErr] = useState<string | null>(null);
+
   const loadOrders = () => {
     if (!user) return;
     setOrdersLoading(true);
@@ -52,27 +112,45 @@ export default function AccountContent() {
       .finally(() => setOrdersLoading(false));
   };
 
+  const loadAddresses = () => {
+    if (!user) return;
+    fetch("/api/addresses", { credentials: "include" })
+      .then((r) => r.json())
+      .then((d) => setAddresses(d.addresses ?? []))
+      .catch(() => {});
+  };
+
   useOrderStream(orders[0]?.id ?? null, loadOrders);
 
   useEffect(() => {
     loadOrders();
-    if (user) {
-      setName(user.name);
-      fetch("/api/addresses", { credentials: "include" })
-        .then((r) => r.json())
-        .then((d) => setAddresses(d.addresses ?? []))
-        .catch(() => {});
-    }
+    loadAddresses();
+    if (user) setName(user.name);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
+  const stats = useMemo(() => {
+    const live = orders.filter((o) => o.status !== "cancelled");
+    return {
+      totalOrders: orders.length,
+      active: orders.filter((o) => o.status === "placed" || o.status === "packed" || o.status === "shipped" || o.status === "out-for-delivery").length,
+      delivered: orders.filter((o) => o.status === "delivered").length,
+      spent: live.reduce((s, o) => s + o.total, 0),
+    };
+  }, [orders]);
+
+  const filtered = useMemo(
+    () => (orderFilter === "all" ? orders : orders.filter((o) => o.status === orderFilter)),
+    [orders, orderFilter],
+  );
+
   if (!user) {
     return (
-      <div className="mx-auto max-w-md px-4 py-16 text-center">
-        <UserIcon className="mx-auto h-12 w-12 text-gold" />
+      <div className="mx-auto max-w-md px-4 py-20 text-center">
+        <UserIcon className="mx-auto h-14 w-14 text-gold" />
         <h1 className="mt-4 font-display text-4xl font-semibold">You&apos;re logged out</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Login to see your account, wishlist and faster checkout.
+          Login to see your orders, addresses and wishlist.
         </p>
         <div className="mt-6 flex justify-center gap-2">
           <Link
@@ -103,6 +181,7 @@ export default function AccountContent() {
       });
       await refresh();
       setEditName(false);
+      toast.success("Name updated.");
     } catch (e) {
       setNameErr(e instanceof Error ? e.message : "Couldn't update name.");
     }
@@ -129,18 +208,11 @@ export default function AccountContent() {
     if (!confirm(`Cancel order ${id}?`)) return;
     try {
       await api(`/api/orders/${id}/cancel`, { method: "POST" });
+      toast.success("Order cancelled.");
       loadOrders();
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Couldn't cancel order.");
+      toast.error(e instanceof Error ? e.message : "Couldn't cancel order.");
     }
-  };
-
-  const deleteAddress = async (id: string) => {
-    if (!confirm("Delete this address?")) return;
-    try {
-      await api(`/api/addresses/${id}`, { method: "DELETE" });
-      setAddresses((a) => a.filter((x) => x.id !== id));
-    } catch {}
   };
 
   const makeDefault = async (id: string) => {
@@ -149,204 +221,663 @@ export default function AccountContent() {
         method: "PUT",
         body: JSON.stringify({ isDefault: true }),
       });
-      setAddresses((list) =>
-        list.map((x) => ({ ...x, isDefault: x.id === d.address.id })),
-      );
-    } catch {}
+      setAddresses((list) => list.map((x) => ({ ...x, isDefault: x.id === d.address.id })));
+      toast.success("Default address updated.");
+    } catch {
+      toast.error("Couldn't update address.");
+    }
+  };
+
+  const deleteAddress = async (id: string) => {
+    if (!confirm("Delete this address?")) return;
+    try {
+      await api(`/api/addresses/${id}`, { method: "DELETE" });
+      setAddresses((a) => a.filter((x) => x.id !== id));
+      toast.success("Address deleted.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't delete address.");
+    }
+  };
+
+  const saveAddress = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAddrBusy(true);
+    setAddrErr(null);
+    try {
+      await api("/api/addresses", { method: "POST", body: JSON.stringify(addrForm) });
+      setAddrForm({ ...emptyAddr });
+      setAddrOpen(false);
+      loadAddresses();
+      toast.success("Address saved.");
+    } catch (e) {
+      setAddrErr(e instanceof Error ? e.message : "Couldn't save address.");
+    } finally {
+      setAddrBusy(false);
+    }
   };
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-12 sm:py-16">
-      <div className="flex items-center gap-4">
-        <span className="grid h-16 w-16 place-items-center rounded-full bg-primary font-display text-3xl font-semibold text-primary-foreground">
-          {initial}
-        </span>
-        <div className="min-w-0 flex-1">
-          {editName ? (
-            <span className="flex items-center gap-2">
-              <input value={name} onChange={(e) => setName(e.target.value)} className="min-w-0 flex-1 rounded-md border border-input bg-background px-3 py-1.5 text-lg" />
-              <button onClick={saveName} className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground">Save</button>
-              <button onClick={() => { setEditName(false); setName(user.name); }} aria-label="Cancel" className="rounded-md border border-input p-1.5"><X className="h-4 w-4" /></button>
-            </span>
-          ) : (
-            <h1 className="flex items-center gap-2 font-display text-4xl font-semibold">
-              <span className="truncate">{user.name}</span>
-              <button onClick={() => setEditName(true)} aria-label="Edit name" className="text-muted-foreground hover:text-primary"><Pencil className="h-4 w-4" /></button>
-            </h1>
-          )}
-          {nameErr && <p className="text-xs text-destructive">{nameErr}</p>}
-          <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
-            <Mail className="h-3.5 w-3.5" /> {user.email}
-            {user.isAdmin && (
-              <Link href="/admin" className="ml-2 rounded-full bg-gold/20 px-2.5 py-0.5 text-[11px] font-semibold text-cocoa hover:bg-gold/30">
-                Admin Panel →
-              </Link>
+    <div className="mx-auto max-w-6xl px-4 py-10 sm:py-14">
+      {/* Profile header */}
+      <div className="relative overflow-hidden rounded-2xl bg-cocoa p-6 shadow-lg sm:p-8">
+        <div className="pointer-events-none absolute -right-10 -top-10 h-48 w-48 rounded-full bg-gold/20 blur-3xl" />
+        <div className="relative flex flex-wrap items-center gap-5">
+          <span className="grid h-20 w-20 shrink-0 place-items-center rounded-full bg-gold font-display text-3xl font-bold text-cocoa">
+            {initial}
+          </span>
+          <div className="min-w-0 flex-1">
+            {editName ? (
+              <span className="flex flex-wrap items-center gap-2">
+                <input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="min-w-0 flex-1 rounded-md border border-gold/30 bg-cocoa-foreground/10 px-3 py-2 text-xl text-cocoa-foreground outline-none focus:border-gold"
+                />
+                <button
+                  onClick={saveName}
+                  className="rounded-md bg-gold px-4 py-2 text-sm font-medium text-cocoa hover:brightness-110"
+                >
+                  Save
+                </button>
+                <button
+                  onClick={() => {
+                    setEditName(false);
+                    setName(user.name);
+                  }}
+                  aria-label="Cancel"
+                  className="rounded-md border border-gold/30 p-2 text-cocoa-foreground/80 hover:border-gold"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </span>
+            ) : (
+              <h1 className="flex items-center gap-2 font-display text-3xl font-semibold text-cocoa-foreground sm:text-4xl">
+                <span className="truncate">{user.name}</span>
+                <button
+                  onClick={() => setEditName(true)}
+                  aria-label="Edit name"
+                  className="text-cocoa-foreground/50 hover:text-gold"
+                >
+                  <Pencil className="h-4 w-4" />
+                </button>
+              </h1>
             )}
-          </p>
+            {nameErr && <p className="mt-1 text-xs text-red-300">{nameErr}</p>}
+            <p className="mt-1 flex flex-wrap items-center gap-3 text-sm text-cocoa-foreground/70">
+              <span className="flex items-center gap-1.5">
+                <Mail className="h-3.5 w-3.5" /> {user.email}
+              </span>
+              <span className="hidden sm:inline">Member since {new Date(user.createdAt).toLocaleDateString("en-IN", { month: "long", year: "numeric" })}</span>
+              {user.isAdmin && (
+                <Link
+                  href="/admin"
+                  className="rounded-full bg-gold px-3 py-1 text-[11px] font-semibold text-cocoa hover:brightness-110"
+                >
+                  Admin Panel →
+                </Link>
+              )}
+            </p>
+          </div>
         </div>
       </div>
 
-      <div className="mt-8 grid gap-3 sm:grid-cols-2">
-        <Link
-          href="/cart"
-          className="flex items-center gap-3 rounded-2xl border border-black/[0.06] bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
-        >
-          <ShoppingBag className="h-5 w-5 text-primary" />
-          <span>
-            <span className="block font-medium">My Cart</span>
-            <span className="block text-xs text-muted-foreground">
-              {count} item{count === 1 ? "" : "s"}
+      {/* Stats */}
+      <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {[
+          { label: "Total Orders", value: stats.totalOrders, Icon: Package },
+          { label: "In Progress", value: stats.active, Icon: Truck },
+          { label: "Delivered", value: stats.delivered, Icon: CheckCircle2 },
+          { label: "Total Spent", value: inr(stats.spent), Icon: ShoppingBag },
+        ].map(({ label, value, Icon }) => (
+          <div key={label} className="rounded-xl border border-border bg-card p-4 shadow-sm">
+            <span className="grid h-8 w-8 place-items-center rounded-lg bg-primary/10 text-primary">
+              <Icon className="h-4 w-4" />
             </span>
-          </span>
-        </Link>
-        <Link
-          href="/wishlist"
-          className="flex items-center gap-3 rounded-2xl border border-black/[0.06] bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
-        >
-          <Heart className="h-5 w-5 text-primary" />
-          <span>
-            <span className="block font-medium">Wishlist</span>
-            <span className="block text-xs text-muted-foreground">{wishlist.length} saved</span>
-          </span>
-        </Link>
+            <p className="mt-2 font-display text-2xl font-semibold text-primary">{value}</p>
+            <p className="text-[11px] uppercase tracking-wider text-muted-foreground">{label}</p>
+          </div>
+        ))}
       </div>
 
-      <div className="mt-8">
-        <h2 className="flex items-center gap-2 text-xl font-semibold">
-          <Package className="h-5 w-5 text-primary" /> My Orders
-        </h2>
-        {ordersLoading ? (
-          <p className="mt-3 text-sm text-muted-foreground">Loading orders…</p>
-        ) : orders.length === 0 ? (
-          <p className="mt-3 rounded-xl border border-dashed border-border p-5 text-sm text-muted-foreground">
-            No orders yet.{" "}
-            <Link href="/shop" className="font-medium text-primary hover:underline">
-              Shop now →
-            </Link>
-          </p>
-        ) : (
-          <ul className="mt-3 space-y-3">
-            {orders.map((o) => (
-              <li key={o.id} className="rounded-xl border border-black/[0.06] bg-white p-4 shadow-sm">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="font-mono text-sm font-semibold">{o.id}</span>
-                  <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
-                    {o.status}
+      {/* Tabs */}
+      <div className="mt-8 flex gap-1 overflow-x-auto border-b border-border">
+        {TABS.map(({ id, label, Icon }) => (
+          <button
+            key={id}
+            onClick={() => setTab(id)}
+            className={cn(
+              "flex items-center gap-2 whitespace-nowrap border-b-2 px-4 py-3 text-sm font-medium transition",
+              tab === id
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground",
+            )}
+          >
+            <Icon className="h-4 w-4" />
+            {label}
+            {id === "orders" && orders.length > 0 && (
+              <span className="rounded-full bg-primary/10 px-1.5 text-[11px] text-primary">
+                {orders.length}
+              </span>
+            )}
+            {id === "addresses" && addresses.length > 0 && (
+              <span className="rounded-full bg-primary/10 px-1.5 text-[11px] text-primary">
+                {addresses.length}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-6">
+        {/* ---------------- OVERVIEW ---------------- */}
+        {tab === "overview" && (
+          <div className="grid gap-6 lg:grid-cols-3">
+            <div className="space-y-4 lg:col-span-2">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Link
+                  href="/cart"
+                  className="flex items-center gap-3 rounded-2xl border border-border bg-card p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+                >
+                  <span className="grid h-11 w-11 place-items-center rounded-xl bg-primary/10 text-primary">
+                    <ShoppingBag className="h-5 w-5" />
                   </span>
-                </div>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {new Date(o.createdAt).toLocaleString("en-IN")} · {o.items.reduce((s, x) => s + x.qty, 0)} items ·{" "}
-                  {o.payment === "cod" ? "COD" : "Online"}
-                </p>
-                <ul className="mt-2 space-y-1 text-sm">
-                  {o.items.map((it) => (
-                    <li key={it.slug + it.variant} className="flex justify-between gap-2">
-                      <span className="min-w-0 truncate">
-                        {it.name} <span className="text-muted-foreground">({it.variant} × {it.qty})</span>
-                      </span>
-                      <span className="shrink-0 font-medium">{inr(it.price * it.qty)}</span>
-                    </li>
-                  ))}
-                </ul>
-                <div className="mt-2 flex items-center justify-between border-t border-border pt-2 text-sm font-semibold">
-                  <span>Total <span className="font-normal text-muted-foreground">{inr(o.total)}</span></span>
-                  {o.status === "placed" ? (
-                    <button onClick={() => cancelOrder(o.id)} className="text-xs font-medium text-destructive hover:underline">
-                      Cancel order
+                  <span>
+                    <span className="block font-medium">My Cart</span>
+                    <span className="block text-xs text-muted-foreground">
+                      {count} item{count === 1 ? "" : "s"}
+                    </span>
+                  </span>
+                </Link>
+                <Link
+                  href="/wishlist"
+                  className="flex items-center gap-3 rounded-2xl border border-border bg-card p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+                >
+                  <span className="grid h-11 w-11 place-items-center rounded-xl bg-primary/10 text-primary">
+                    <Heart className="h-5 w-5" />
+                  </span>
+                  <span>
+                    <span className="block font-medium">Wishlist</span>
+                    <span className="block text-xs text-muted-foreground">
+                      {wishlist.length} saved
+                    </span>
+                  </span>
+                </Link>
+              </div>
+
+              <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-display text-lg font-semibold">Recent Orders</h3>
+                  {orders.length > 0 && (
+                    <button
+                      onClick={() => setTab("orders")}
+                      className="text-xs font-medium text-primary hover:underline"
+                    >
+                      View all →
                     </button>
-                  ) : (
-                    <span className="text-xs font-medium capitalize text-muted-foreground">{o.status}</span>
                   )}
                 </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+                {ordersLoading ? (
+                  <p className="mt-3 text-sm text-muted-foreground">Loading…</p>
+                ) : orders.length === 0 ? (
+                  <div className="mt-4 rounded-xl border border-dashed border-border p-8 text-center">
+                    <Package className="mx-auto h-8 w-8 text-gold" />
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      No orders yet.{" "}
+                      <Link href="/shop" className="font-medium text-primary hover:underline">
+                        Start shopping
+                      </Link>
+                    </p>
+                  </div>
+                ) : (
+                  <ul className="mt-3 space-y-2">
+                    {orders.slice(0, 4).map((o) => (
+                      <li
+                        key={o.id}
+                        className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/60 px-3 py-2.5 text-sm"
+                      >
+                        <span className="font-mono text-xs font-semibold">{o.id}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {new Date(o.createdAt).toLocaleDateString("en-IN", {
+                            day: "numeric",
+                            month: "short",
+                            year: "numeric",
+                          })}
+                        </span>
+                        <span
+                          className={cn(
+                            "rounded-full px-2 py-0.5 text-[11px] font-medium",
+                            STATUS_STYLE[o.status] ?? "bg-border text-muted-foreground",
+                          )}
+                        >
+                          {labelStatus(o.status)}
+                        </span>
+                        <b className="text-primary">{inr(o.total)}</b>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
 
-      <div className="mt-8">
-        <h2 className="flex items-center gap-2 text-xl font-semibold">
-          <MapPin className="h-5 w-5 text-primary" /> Saved Addresses
-        </h2>
-        {addresses.length === 0 ? (
-          <p className="mt-3 rounded-xl border border-dashed border-border p-5 text-sm text-muted-foreground">
-            No saved addresses. One gets saved automatically at checkout.
-          </p>
-        ) : (
-          <ul className="mt-3 space-y-3">
-            {addresses.map((a) => (
-              <li key={a.id} className="rounded-xl border border-black/[0.06] bg-white p-4 text-sm shadow-sm">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-semibold">
-                    {a.label}
-                    {a.isDefault && (
-                      <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">Default</span>
-                    )}
-                  </span>
-                  <span className="flex gap-2 text-xs">
-                    {!a.isDefault && (
-                      <button onClick={() => makeDefault(a.id)} className="text-primary hover:underline">Make default</button>
-                    )}
-                    <button onClick={() => deleteAddress(a.id)} className="text-destructive hover:underline">Delete</button>
-                  </span>
+            <div className="space-y-4">
+              <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-display text-lg font-semibold">Default Address</h3>
+                  <button
+                    onClick={() => setTab("addresses")}
+                    className="text-xs font-medium text-primary hover:underline"
+                  >
+                    Manage →
+                  </button>
                 </div>
-                <p className="mt-1 text-muted-foreground">
-                  {a.name} · {a.phone}
-                  <br />
-                  {a.address}, {a.city}, {a.state} — {a.pin}
-                </p>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+                {addresses.length === 0 ? (
+                  <p className="mt-3 text-sm text-muted-foreground">No saved addresses yet.</p>
+                ) : (
+                  (() => {
+                    const a = addresses.find((x) => x.isDefault) ?? addresses[0];
+                    return (
+                      <div className="mt-3 rounded-lg border border-gold/30 bg-gold/[0.05] p-4 text-sm">
+                        <p className="flex items-center gap-2 font-medium">
+                          <MapPin className="h-4 w-4 text-gold" /> {a.label}
+                        </p>
+                        <p className="mt-1 text-muted-foreground">
+                          {a.name} · {a.phone}
+                          <br />
+                          {a.address}
+                          <br />
+                          {a.city}, {a.state} — {a.pin}
+                        </p>
+                      </div>
+                    );
+                  })()
+                )}
+              </div>
 
-      <div className="mt-8 rounded-xl border border-border bg-card p-5">
-        <h2 className="flex items-center gap-2 text-xl font-semibold">
-          <KeyRound className="h-5 w-5 text-primary" /> Change Password
-        </h2>
-        {!showPass ? (
-          <button onClick={() => setShowPass(true)} className="mt-3 rounded-md border border-input px-4 py-2 text-sm hover:border-gold">
-            Change password
-          </button>
-        ) : (
-          <form onSubmit={changePassword} className="mt-3 space-y-3">
-            <label className="block text-sm font-medium">
-              Current password
-              <input type="password" value={current} onChange={(e) => setCurrent(e.target.value)} required autoComplete="current-password" className={inputCls} />
-            </label>
-            <label className="block text-sm font-medium">
-              New password (min 6 characters)
-              <input type="password" value={next} onChange={(e) => setNext(e.target.value)} required minLength={6} autoComplete="new-password" className={inputCls} />
-            </label>
-            {passMsg && (
-              <p className={`text-sm ${passMsg.ok ? "text-primary" : "text-destructive"}`}>{passMsg.text}</p>
+              <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+                <h3 className="font-display text-lg font-semibold">Quick Actions</h3>
+                <div className="mt-3 space-y-2 text-sm">
+                  <Link href="/track" className="flex items-center gap-2 rounded-lg px-2 py-2 hover:bg-secondary">
+                    <Truck className="h-4 w-4 text-primary" /> Track an order
+                  </Link>
+                  <Link href="/shop" className="flex items-center gap-2 rounded-lg px-2 py-2 hover:bg-secondary">
+                    <ShoppingBag className="h-4 w-4 text-primary" /> Continue shopping
+                  </Link>
+                  <Link href="/wishlist" className="flex items-center gap-2 rounded-lg px-2 py-2 hover:bg-secondary">
+                    <Heart className="h-4 w-4 text-primary" /> View wishlist
+                  </Link>
+                  <Link href="/contact" className="flex items-center gap-2 rounded-lg px-2 py-2 hover:bg-secondary">
+                    <Mail className="h-4 w-4 text-primary" /> Contact support
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ---------------- ORDERS ---------------- */}
+        {tab === "orders" && (
+          <div>
+            <div className="flex flex-wrap gap-2">
+              {[
+                ["all", "All"],
+                ["placed", "Placed"],
+                ["packed", "Packed"],
+                ["shipped", "Shipped"],
+                ["out-for-delivery", "Out for Delivery"],
+                ["delivered", "Delivered"],
+                ["cancelled", "Cancelled"],
+              ].map(([v, l]) => (
+                <button
+                  key={v}
+                  onClick={() => setOrderFilter(v)}
+                  className={cn(
+                    "rounded-full border px-3.5 py-1.5 text-xs font-medium transition",
+                    orderFilter === v
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-input text-muted-foreground hover:border-gold",
+                  )}
+                >
+                  {l}
+                </button>
+              ))}
+            </div>
+
+            {ordersLoading ? (
+              <p className="mt-6 text-sm text-muted-foreground">Loading orders…</p>
+            ) : filtered.length === 0 ? (
+              <div className="mt-6 rounded-2xl border border-dashed border-border p-12 text-center">
+                <Package className="mx-auto h-10 w-10 text-gold" />
+                <p className="mt-3 font-medium">No orders here</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {orderFilter === "all"
+                    ? "You haven't placed any order yet."
+                    : `No ${labelStatus(orderFilter).toLowerCase()} orders.`}
+                </p>
+                <Link
+                  href="/shop"
+                  className="mt-4 inline-block rounded-md bg-primary px-6 py-2.5 text-sm text-primary-foreground"
+                >
+                  Start shopping
+                </Link>
+              </div>
+            ) : (
+              <ul className="mt-5 space-y-3">
+                {filtered.map((o) => {
+                  const isOpen = openOrder === o.id;
+                  return (
+                    <li
+                      key={o.id}
+                      className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm"
+                    >
+                      <button
+                        onClick={() => setOpenOrder(isOpen ? null : o.id)}
+                        className="flex w-full flex-wrap items-center justify-between gap-3 px-5 py-4 text-left hover:bg-secondary/40"
+                      >
+                        <span className="min-w-0">
+                          <span className="flex items-center gap-2">
+                            <span className="font-mono text-sm font-semibold">{o.id}</span>
+                            <span
+                              className={cn(
+                                "rounded-full px-2 py-0.5 text-[11px] font-medium",
+                                STATUS_STYLE[o.status] ?? "bg-border text-muted-foreground",
+                              )}
+                            >
+                              {labelStatus(o.status)}
+                            </span>
+                          </span>
+                          <span className="mt-1 block text-xs text-muted-foreground">
+                            {new Date(o.createdAt).toLocaleString("en-IN", {
+                              day: "numeric",
+                              month: "short",
+                              year: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                            {" · "}
+                            {o.payment === "cod" ? "Cash on Delivery" : "Paid online"}
+                          </span>
+                        </span>
+                        <span className="flex items-center gap-3">
+                          <b className="font-display text-lg text-primary">{inr(o.total)}</b>
+                          <ChevronDown
+                            className={cn("h-4 w-4 text-muted-foreground transition", isOpen && "rotate-180")}
+                          />
+                        </span>
+                      </button>
+
+                      {isOpen && (
+                        <div className="border-t border-border bg-secondary/30 px-5 py-4">
+                          <ul className="space-y-2">
+                            {o.items.map((it) => (
+                              <li key={it.slug + it.variant} className="flex items-center gap-3 text-sm">
+                                <img
+                                  src={it.image}
+                                  alt=""
+                                  className="h-12 w-12 rounded-lg border border-border object-cover"
+                                />
+                                <span className="min-w-0 flex-1">
+                                  <Link
+                                    href={`/product/${it.slug}`}
+                                    className="font-medium hover:text-primary"
+                                  >
+                                    {it.name}
+                                  </Link>
+                                  <span className="block text-xs text-muted-foreground">
+                                    {it.variant} × {it.qty}
+                                  </span>
+                                </span>
+                                <b>{inr(it.price * it.qty)}</b>
+                              </li>
+                            ))}
+                          </ul>
+
+                          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
+                            <Link
+                              href={`/track?id=${o.id}`}
+                              className="flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
+                            >
+                              <Truck className="h-3.5 w-3.5" /> Track this order
+                            </Link>
+                            {o.status === "placed" && (
+                              <button
+                                onClick={() => cancelOrder(o.id)}
+                                className="text-xs font-medium text-destructive hover:underline"
+                              >
+                                Cancel order
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
             )}
-            <div className="flex gap-2">
-              <button className="rounded-md bg-primary px-5 py-2 text-sm font-medium text-primary-foreground hover:bg-cocoa">
-                Update password
-              </button>
-              <button type="button" onClick={() => setShowPass(false)} className="rounded-md border border-input px-4 py-2 text-sm">
-                Cancel
+          </div>
+        )}
+
+        {/* ---------------- ADDRESSES ---------------- */}
+        {tab === "addresses" && (
+          <div>
+            <div className="flex items-center justify-between">
+              <h3 className="font-display text-lg font-semibold">Saved Addresses</h3>
+              <button
+                onClick={() => setAddrOpen((s) => !s)}
+                className="flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-cocoa"
+              >
+                <Plus className="h-4 w-4" /> Add address
               </button>
             </div>
-            <p className="text-xs text-muted-foreground">All devices will be logged out for security.</p>
-          </form>
+
+            {addrOpen && (
+              <form onSubmit={saveAddress} className="mt-4 space-y-3 rounded-2xl border border-gold/40 bg-card p-5">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="text-sm font-medium">
+                    <span className="text-xs uppercase tracking-wider text-muted-foreground">Label</span>
+                    <input value={addrForm.label} onChange={(e) => setAddrForm({ ...addrForm, label: e.target.value })} placeholder="Home / Office" className={`${inputCls} mt-1.5`} />
+                  </label>
+                  <label className="text-sm font-medium">
+                    <span className="text-xs uppercase tracking-wider text-muted-foreground">Full name *</span>
+                    <input value={addrForm.name} onChange={(e) => setAddrForm({ ...addrForm, name: e.target.value })} required className={`${inputCls} mt-1.5`} />
+                  </label>
+                  <label className="text-sm font-medium">
+                    <span className="text-xs uppercase tracking-wider text-muted-foreground">Phone *</span>
+                    <input value={addrForm.phone} onChange={(e) => setAddrForm({ ...addrForm, phone: e.target.value })} required inputMode="numeric" maxLength={10} placeholder="9876543210" className={`${inputCls} mt-1.5`} />
+                  </label>
+                  <label className="text-sm font-medium sm:col-span-2">
+                    <span className="text-xs uppercase tracking-wider text-muted-foreground">Street address *</span>
+                    <textarea value={addrForm.address} onChange={(e) => setAddrForm({ ...addrForm, address: e.target.value })} required rows={2} className={`${inputCls} mt-1.5 resize-y`} />
+                  </label>
+                  <label className="text-sm font-medium">
+                    <span className="text-xs uppercase tracking-wider text-muted-foreground">City *</span>
+                    <input value={addrForm.city} onChange={(e) => setAddrForm({ ...addrForm, city: e.target.value })} required className={`${inputCls} mt-1.5`} />
+                  </label>
+                  <label className="text-sm font-medium">
+                    <span className="text-xs uppercase tracking-wider text-muted-foreground">State *</span>
+                    <input value={addrForm.state} onChange={(e) => setAddrForm({ ...addrForm, state: e.target.value })} required className={`${inputCls} mt-1.5`} />
+                  </label>
+                  <label className="text-sm font-medium">
+                    <span className="text-xs uppercase tracking-wider text-muted-foreground">PIN code *</span>
+                    <input value={addrForm.pin} onChange={(e) => setAddrForm({ ...addrForm, pin: e.target.value.replace(/\D/g, "").slice(0, 6) })} required inputMode="numeric" maxLength={6} className={`${inputCls} mt-1.5`} />
+                  </label>
+                </div>
+                {addrErr && (
+                  <p role="alert" className="rounded-md border border-destructive/25 bg-destructive/[0.06] px-4 py-2.5 text-sm text-destructive">
+                    {addrErr}
+                  </p>
+                )}
+                <div className="flex gap-2">
+                  <button disabled={addrBusy} className="rounded-md bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground hover:bg-cocoa disabled:opacity-60">
+                    {addrBusy ? "Saving…" : "Save address"}
+                  </button>
+                  <button type="button" onClick={() => { setAddrOpen(false); setAddrForm({ ...emptyAddr }); setAddrErr(null); }} className="rounded-md border border-input px-5 py-2.5 text-sm">
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {addresses.length === 0 ? (
+              <div className="mt-6 rounded-2xl border border-dashed border-border p-12 text-center">
+                <MapPin className="mx-auto h-10 w-10 text-gold" />
+                <p className="mt-3 font-medium">No saved addresses</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Save an address for faster checkout.
+                </p>
+              </div>
+            ) : (
+              <ul className="mt-5 grid gap-4 sm:grid-cols-2">
+                {addresses.map((a) => (
+                  <li
+                    key={a.id}
+                    className={cn(
+                      "flex flex-col rounded-2xl border bg-card p-5 shadow-sm",
+                      a.isDefault ? "border-gold" : "border-border",
+                    )}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="flex items-center gap-2 font-semibold">
+                        <MapPin className="h-4 w-4 text-primary" /> {a.label}
+                      </span>
+                      {a.isDefault && (
+                        <span className="rounded-full bg-gold/20 px-2.5 py-0.5 text-[11px] font-semibold text-cocoa">
+                          Default
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-2 flex-1 text-sm text-muted-foreground">
+                      {a.name} · {a.phone}
+                      <br />
+                      {a.address}
+                      <br />
+                      {a.city}, {a.state} — {a.pin}
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-3 border-t border-border pt-3 text-xs">
+                      {!a.isDefault && (
+                        <button onClick={() => makeDefault(a.id)} className="font-medium text-primary hover:underline">
+                          Set as default
+                        </button>
+                      )}
+                      <button
+                        onClick={() => deleteAddress(a.id)}
+                        className="flex items-center gap-1 font-medium text-destructive hover:underline"
+                      >
+                        <Trash2 className="h-3 w-3" /> Delete
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+
+        {/* ---------------- PROFILE ---------------- */}
+        {tab === "profile" && (
+          <div className="grid gap-6 lg:grid-cols-2">
+            <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
+              <h3 className="font-display text-lg font-semibold">Profile Information</h3>
+              <div className="mt-4 space-y-4">
+                <label className="block text-sm font-medium">
+                  Full name
+                  {editName ? (
+                    <span className="mt-1.5 flex gap-2">
+                      <input value={name} onChange={(e) => setName(e.target.value)} className={inputCls} />
+                      <button onClick={saveName} className="shrink-0 rounded-md bg-primary px-4 text-primary-foreground">Save</button>
+                    </span>
+                  ) : (
+                    <span className="mt-1.5 flex items-center justify-between rounded-md border border-input bg-background px-3 py-2">
+                      {user.name}
+                      <button onClick={() => setEditName(true)} aria-label="Edit name" className="text-muted-foreground hover:text-primary">
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                    </span>
+                  )}
+                  {nameErr && <p className="mt-1 text-xs text-destructive">{nameErr}</p>}
+                </label>
+                <label className="block text-sm font-medium">
+                  Email address
+                  <span className="mt-1.5 flex items-center gap-2 rounded-md border border-input bg-secondary/50 px-3 py-2 text-muted-foreground">
+                    <Mail className="h-4 w-4" /> {user.email}
+                  </span>
+                  <span className="mt-1 block text-xs text-muted-foreground">
+                    Email cannot be changed.
+                  </span>
+                </label>
+                <label className="block text-sm font-medium">
+                  Member since
+                  <span className="mt-1.5 block rounded-md border border-input bg-secondary/50 px-3 py-2 text-muted-foreground">
+                    {new Date(user.createdAt).toLocaleDateString("en-IN", {
+                      day: "numeric",
+                      month: "long",
+                      year: "numeric",
+                    })}
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
+              <h3 className="font-display text-lg font-semibold">Change Password</h3>
+              {!showPass ? (
+                <>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Use a strong password you don&apos;t use anywhere else.
+                  </p>
+                  <button
+                    onClick={() => setShowPass(true)}
+                    className="mt-4 rounded-md border border-input px-5 py-2.5 text-sm hover:border-gold"
+                  >
+                    Change password
+                  </button>
+                </>
+              ) : (
+                <form onSubmit={changePassword} className="mt-4 space-y-3">
+                  <label className="block text-sm font-medium">
+                    Current password
+                    <input type="password" value={current} onChange={(e) => setCurrent(e.target.value)} required autoComplete="current-password" className={inputCls} />
+                  </label>
+                  <label className="block text-sm font-medium">
+                    New password (min 6 characters)
+                    <input type="password" value={next} onChange={(e) => setNext(e.target.value)} required minLength={6} autoComplete="new-password" className={inputCls} />
+                  </label>
+                  {passMsg && (
+                    <p className={cn("text-sm", passMsg.ok ? "text-primary" : "text-destructive")}>{passMsg.text}</p>
+                  )}
+                  <div className="flex gap-2">
+                    <button className="rounded-md bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground hover:bg-cocoa">
+                      Update password
+                    </button>
+                    <button type="button" onClick={() => setShowPass(false)} className="rounded-md border border-input px-5 py-2.5 text-sm">
+                      Cancel
+                    </button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    All devices will be logged out for security.
+                  </p>
+                </form>
+              )}
+            </div>
+
+            <div className="rounded-2xl border border-destructive/30 bg-destructive/[0.04] p-6 lg:col-span-2">
+              <h3 className="font-display text-lg font-semibold">Danger Zone</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Signing out ends your session on this device.
+              </p>
+              <button
+                onClick={async () => {
+                  await logout();
+                  router.push("/");
+                }}
+                className="mt-4 flex items-center gap-2 rounded-md border border-destructive/40 px-5 py-2.5 text-sm font-medium text-destructive hover:bg-destructive hover:text-white"
+              >
+                <LogOut className="h-4 w-4" /> Logout
+              </button>
+            </div>
+          </div>
         )}
       </div>
-
-      <button
-        onClick={async () => {
-          await logout();
-          router.push("/");
-        }}
-        className="mt-6 flex w-full items-center justify-center gap-2 rounded-full border border-black/10 py-3 text-sm font-medium hover:border-destructive hover:text-destructive"
-      >
-        <LogOut className="h-4 w-4" /> Logout
-      </button>
-      <p className="mt-3 text-center text-xs text-muted-foreground">
-        Orders and account are safely stored in the local database.
-      </p>
     </div>
   );
 }
