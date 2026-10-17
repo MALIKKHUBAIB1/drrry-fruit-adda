@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useState } from "react";
 import {
   Gift,
@@ -10,6 +10,7 @@ import {
   LogOut,
   Mail,
   Megaphone,
+  MapPinned,
   Menu,
   Package,
   ShoppingBag,
@@ -29,6 +30,7 @@ const NAV = [
   { tab: "Categories", Icon: LayoutGrid },
   { tab: "Gift Hampers", Icon: Gift },
   { tab: "Promo Banner", Icon: Megaphone },
+  { tab: "Pincodes", Icon: MapPinned },
   { tab: "Coupons", Icon: Ticket },
   { tab: "Users", Icon: Users },
   { tab: "Messages", Icon: Mail },
@@ -38,10 +40,17 @@ const NAV = [
 export function AdminShell({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const [open, setOpen] = useState(false);
   const active = searchParams.get("tab") ?? "Overview";
   const initial = user?.name.trim().charAt(0).toUpperCase() || "A";
+
+  const isLogin = pathname === "/admin/login" || pathname.startsWith("/admin/login/");
+
+  if (isLogin) {
+    return <>{children}</>;
+  }
 
   const doLogout = async () => {
     await logout();

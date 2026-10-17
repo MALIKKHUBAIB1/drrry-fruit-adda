@@ -48,3 +48,32 @@ export async function PATCH(req: NextRequest) {
   if (!updated) return NextResponse.json({ error: "User not found." }, { status: 404 });
   return NextResponse.json({ user: updated });
 }
+
+// DELETE /api/admin/users?id= — user delete karo (admin khud ko nahi)
+export async function DELETE(req: NextRequest) {
+  const { status, user } = await requireAdmin(req);
+  if (status !== 200) return NextResponse.json({ error: ADMIN_DENIED(status) }, { status });
+  if (!sameOrigin(req)) {
+    return NextResponse.json({ error: "Cross-origin request blocked." }, { status: 403 });
+  }
+  const id = cleanText(new URL(req.url).searchParams.get("id") ?? "", 40);
+  if (!id) return NextResponse.json({ error: "id required." }, { status: 400 });
+  if (id === user?.id) {
+    return NextResponse.json({ error: "You cannot delete your own account." }, { status: 400 });
+  }
+
+  const removed = await updateDb((db) => {
+    const i = db.users.findIndex((u) => u.id === id);
+    if (i < 0) return false;
+    db.sessions = db.sessions.filter((s) => s.userId !== id);
+    db.orders = db.orders.filter((o) => o.userId !== id);
+    db.carts = Object.fromEntries(Object.entries(db.carts).filter(([k]) => k !== id));
+    db.wishlists = Object.fromEntries(Object.entries(db.wishlists).filter(([k]) => k !== id));
+    db.addresses = db.addresses.filter((a) => a.userId !== id);
+    db.reviews = db.reviews.filter((r) => r.userId !== id);
+    db.users.splice(i, 1);
+    return true;
+  });
+  if (!removed) return NextResponse.json({ error: "User not found." }, { status: 404 });
+  return NextResponse.json({ ok: true });
+}

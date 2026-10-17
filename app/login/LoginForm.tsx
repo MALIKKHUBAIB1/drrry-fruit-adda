@@ -15,11 +15,36 @@ export default function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirect = searchParams.get("redirect") ?? undefined;
-  const [email, setEmail] = useState(DEV ? DEV_EMAIL : "");
-  const [pass, setPass] = useState(DEV ? DEV_PASS : "");
+  const [email, setEmail] = useState("");
+  const [pass, setPass] = useState("");
   const [show, setShow] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isAdminEmail) {
+      setErr("Admin account — please use the Admin Login page.");
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      setErr("Enter a valid email address.");
+      return;
+    }
+    if (!pass) {
+      setErr("Enter your password.");
+      return;
+    }
+    setBusy(true);
+    setErr(null);
+    const msg = await login(email, pass);
+    setBusy(false);
+    if (msg) setErr(msg);
+    else router.push(redirect ?? "/account");
+  };
+
+  // Admin email se user login nahi hoga
+  const isAdminEmail = email.trim().toLowerCase() === "admin@dryfruitadda.in";
 
   useEffect(() => {
     if (user) router.replace(redirect ?? "/account");

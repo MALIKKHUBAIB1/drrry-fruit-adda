@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { readDb, shippingFor, updateDb, type DbOrder } from "@/lib/server/db";
+import { readDb, updateDb, type DbOrder } from "@/lib/server/db";
+import { shippingForPincode } from "@/lib/server/pincode";
 import { getSessionUser, newId } from "@/lib/server/auth";
 import { couponStatus } from "@/lib/server/db";
 import {
@@ -68,7 +69,7 @@ export async function POST(req: NextRequest) {
   if (!isValidPin(pin)) return NextResponse.json({ error: "Enter a valid 6-digit PIN code." }, { status: 400 });
   if (items.length === 0 || items.length > 50) return NextResponse.json({ error: "Cart is empty or too large." }, { status: 400 });
 
-  const order = await updateDb((db) => {
+  const order = await updateDb(async (db) => {
     const lines = items.map((it: unknown) => {
       const o = it as Record<string, unknown>;
       const slug = cleanText(o.slug, 80);
@@ -103,7 +104,7 @@ export async function POST(req: NextRequest) {
       coupon = c.code;
       c.usedCount = (c.usedCount ?? 0) + 1;
     }
-    const shipping = shippingFor(subtotal - discount);
+    const shipping = await shippingForPincode(pin, subtotal - discount);
     const total = subtotal - discount + shipping;
 
     const o: DbOrder = {

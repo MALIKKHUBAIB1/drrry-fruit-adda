@@ -103,6 +103,44 @@ export default function CheckoutContent() {
     { id: string; label: string; name: string; phone: string; address: string; city: string; state: string; pin: string; isDefault: boolean }[]
   >([]);
   const [saveAddress, setSaveAddress] = useState(true);
+  const [pinInfo, setPinInfo] = useState<{
+    city: string; state: string; district: string; zone: string;
+    shipping: number; serviceable: boolean; codAvailable: boolean;
+  } | null>(null);
+  const [pinErr, setPinErr] = useState<string | null>(null);
+  const [pinLoading, setPinLoading] = useState(false);
+
+  const checkPin = async (pin: string) => {
+    if (!/^[1-9]\d{5}$/.test(pin)) {
+      setPinInfo(null);
+      setPinErr(null);
+      return;
+    }
+    setPinLoading(true);
+    setPinErr(null);
+    try {
+      const res = await fetch(`/api/pincode?pin=${pin}`);
+      const d = await res.json();
+      if (!res.ok) {
+        setPinInfo(null);
+        setPinErr(d.error || "PIN code not serviceable.");
+        return;
+      }
+      setPinInfo({
+        city: d.city, state: d.state, district: d.district,
+        zone: d.zone, shipping: d.shipping,
+        serviceable: d.serviceable, codAvailable: d.codAvailable,
+      });
+      // City/state auto-fill (user ne manually change nahi kiya ho)
+      setForm((f) => ({ ...f, city: d.city || f.city, state: d.state || f.state }));
+      setErrors((prev) => ({ ...prev, city: undefined, state: undefined, pin: undefined }));
+    } catch {
+      setPinInfo(null);
+      setPinErr("Couldn't verify PIN. Please try again.");
+    } finally {
+      setPinLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (user) {
@@ -504,7 +542,12 @@ export default function CheckoutContent() {
               PIN code
               <input
                 value={form.pin}
-                onChange={set("pin")}
+                onChange={(e) => {
+                  const v = e.target.value.replace(/\D/g, "").slice(0, 6);
+                  set("pin")({ target: { value: v } } as React.ChangeEvent<HTMLInputElement>);
+                  if (v.length === 6) checkPin(v);
+                  else { setPinInfo(null); setPinErr(null); }
+                }}
                 required
                 inputMode="numeric"
                 maxLength={6}
@@ -514,6 +557,17 @@ export default function CheckoutContent() {
                 className={field}
               />
               {errors.pin && <p className={errText}>{errors.pin}</p>}
+              {pinLoading && <p className="mt-1 text-xs text-muted-foreground">Checking PIN code…</p>}
+              {pinErr && <p className="mt-1 text-xs text-destructive">{pinErr}</p>}
+              {pinInfo && (
+                <p className="mt-1 text-xs text-primary">
+                  {pinInfo.city}{pinInfo.district ? `, ${pinInfo.district}` : ""}, {pinInfo.state}
+                  {pinInfo.serviceable
+                    ? ` · Delivery charge ${pinInfo.shipping === 0 ? "FREE" : `₹${pinInfo.shipping}`}`
+                    : " · Not serviceable"}
+                  {!pinInfo.codAvailable && " · COD unavailable"}
+                </p>
+              )}
             </label>
             <label className="text-sm sm:col-span-3">
               Delivery instructions (optional)

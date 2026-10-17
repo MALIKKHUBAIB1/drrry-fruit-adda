@@ -16,7 +16,7 @@ async function j(path: string, init?: RequestInit) {
   return data;
 }
 
-const TABS = ["Overview", "Orders", "Products", "Categories", "Gift Hampers", "Promo Banner", "Coupons", "Users", "Messages", "Reviews"] as const;
+const TABS = ["Overview", "Orders", "Products", "Categories", "Gift Hampers", "Promo Banner", "Pincodes", "Coupons", "Users", "Messages", "Reviews"] as const;
 type Tab = (typeof TABS)[number];
 
 export default function AdminContent() {
@@ -78,8 +78,8 @@ export default function AdminContent() {
       <div className="mx-auto max-w-md px-4 py-20 text-center">
         <ShieldAlert className="mx-auto h-12 w-12 text-gold" />
         <h1 className="mt-4 font-display text-4xl font-semibold">Login required</h1>
-        <Link href="/login?redirect=/admin" className="mt-6 inline-block rounded-full bg-primary px-6 py-2.5 text-sm text-primary-foreground">
-          Login
+        <Link href="/admin/login" className="mt-6 inline-block rounded-full bg-primary px-6 py-2.5 text-sm text-primary-foreground">
+          Admin Login
         </Link>
       </div>
     );
@@ -107,6 +107,7 @@ export default function AdminContent() {
           {tab === "Categories" && "Shop-by-category tiles on the home page."}
           {tab === "Gift Hampers" && "Curated gift hampers with multiple items."}
           {tab === "Promo Banner" && "Home page offer banner with live countdown."}
+          {tab === "Pincodes" && "Pincode-wise delivery charges across India."}
           {tab === "Coupons" && "Create and manage discount codes."}
           {tab === "Users" && "Customers and admin access."}
           {tab === "Messages" && "Contact messages and subscribers."}
@@ -129,6 +130,7 @@ export default function AdminContent() {
         {tab === "Categories" && <CategoriesTab cats={cats} reload={load} />}
         {tab === "Gift Hampers" && <HampersTab hampers={hampers} reload={load} />}
         {tab === "Promo Banner" && <PromoTab promo={promo} reload={load} />}
+        {tab === "Pincodes" && <PincodesTab reload={load} />}
         {tab === "Coupons" && <CouponsTab coupons={coupons} reload={load} />}
         {tab === "Users" && <UsersTab users={users} reload={load} />}
         {tab === "Messages" && <MessagesTab contacts={contacts} subs={subs} reload={load} />}
@@ -1022,6 +1024,18 @@ function UsersTab({ users, reload }: { users: any[]; reload: () => void }) {
               Make admin
             </button>
           )}
+          {!u.isAdmin && (
+            <button
+              onClick={async () => {
+                if (!confirm(`Delete user ${u.name} (${u.email})? This will also remove their orders, cart, wishlist, addresses and reviews.`)) return;
+                try { await j(`/api/admin/users?id=${u.id}`, { method: "DELETE" }); reload(); }
+                catch (e) { alert(e instanceof Error ? e.message : "Couldn't delete user."); }
+              }}
+              className="text-xs text-destructive hover:underline"
+            >
+              Delete
+            </button>
+          )}
         </li>
       ))}
     </ul>
@@ -1340,5 +1354,169 @@ function PromoTab({ promo, reload }: { promo: any; reload: () => void }) {
         Banner home page par hero ke baad dikhega, expiry tak live countdown chalega. Disable karne par gayab ho jayega.
       </p>
     </form>
+  );
+}
+
+function PincodesTab({ reload }: { reload: () => void }) {
+  const [list, setList] = useState<any[]>([]);
+  const [q, setQ] = useState("");
+  const [zoneF, setZoneF] = useState("");
+  const [defaults, setDefaults] = useState<Record<string, number>>({});
+  const [form, setForm] = useState({
+    pin: "", city: "", state: "", district: "",
+    zone: "tier2", shipping: "69", codAvailable: true, serviceable: true,
+  });
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    const sp = new URLSearchParams();
+    if (q) sp.set("q", q);
+    if (zoneF) sp.set("zone", zoneF);
+    const d = await j(`/api/admin/pincodes?${sp.toString()}`);
+    setList(d.pincodes);
+    setDefaults(d.defaultCharges ?? {});
+  }, [q, zoneF]);
+
+  useEffect(() => { load().catch(() => {}); }, [load]);
+
+  const lookup = async () => {
+    if (!/^[1-9]\d{5}$/.test(form.pin)) { setErr("Enter a valid 6-digit PIN code."); return; }
+    setBusy(true); setErr(null);
+    try {
+      const res = await fetch(`/api/pincode?pin=${form.pin}`);
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || "PIN not found.");
+      setForm((f) => ({
+        ...f,
+        city: d.city || f.city,
+        state: d.state || f.state,
+        district: d.district || f.district,
+        zone: d.zone,
+        shipping: String(d.shipping),
+        codAvailable: d.codAvailable,
+        serviceable: d.serviceable,
+      }));
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Lookup failed.");
+    } finally { setBusy(false); }
+  };
+
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true); setErr(null);
+    try {
+      await j("/api/admin/pincodes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...form, shipping: Number(form.shipping) }),
+      });
+      setForm({ pin: "", city: "", state: "", district: "", zone: "tier2", shipping: String(defaults.tier2 ?? 69), codAvailable: true, serviceable: true });
+      await load();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Couldn't save pincode.");
+    } finally { setBusy(false); }
+  };
+
+  const remove = async (pin: string) => {
+    if (!confirm(`Remove ${pin}? Default zone charges apply again.`)) return;
+    try { await j(`/api/admin/pincodes?pin=${pin}`, { method: "DELETE" }); await load(); reload(); }
+    catch (e) { alert(e instanceof Error ? e.message : "Couldn't delete."); }
+  };
+
+  const F = "w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-gold";
+  const L = "block text-xs font-semibold uppercase tracking-wider text-muted-foreground";
+
+  return (
+    <div className="space-y-5">
+      {/* Zone defaults info */}
+      <div className="rounded-xl border border-gold/30 bg-gold/[0.05] p-4">
+        <p className="font-semibold">Default zone charges (apne aap lagte hain)</p>
+        <div className="mt-2 flex flex-wrap gap-2 text-xs">
+          {Object.entries(defaults).map(([z, v]) => (
+            <span key={z} className="rounded-full bg-card px-3 py-1 font-medium capitalize shadow-sm">
+              {z}: ₹{v}
+            </span>
+          ))}
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">
+          Neeche koi pincode add karoge to uske liye custom charge set ho jayega. Free shipping ₹999+ par.
+        </p>
+      </div>
+
+      {/* Add form */}
+      <form onSubmit={save} className="space-y-3 rounded-xl border border-border bg-card p-5">
+        <h3 className="font-semibold">Add / update pincode</h3>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <label className="text-sm font-medium">
+            <span className={L}>PIN code *</span>
+            <span className="mt-1.5 flex gap-2">
+              <input value={form.pin} onChange={(e) => setForm({ ...form, pin: e.target.value.replace(/\D/g, "").slice(0, 6) })} required inputMode="numeric" maxLength={6} placeholder="110001" className={`${F} font-mono`} />
+              <button type="button" onClick={lookup} disabled={busy} className="shrink-0 rounded-md border border-primary px-3 text-xs font-medium text-primary hover:bg-primary hover:text-primary-foreground">Lookup</button>
+            </span>
+          </label>
+          <label className="text-sm font-medium">
+            <span className={L}>City *</span>
+            <input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} required placeholder="New Delhi" className={`${F} mt-1.5`} />
+          </label>
+          <label className="text-sm font-medium">
+            <span className={L}>State *</span>
+            <input value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })} required placeholder="Delhi" className={`${F} mt-1.5`} />
+          </label>
+          <label className="text-sm font-medium">
+            <span className={L}>District</span>
+            <input value={form.district} onChange={(e) => setForm({ ...form, district: e.target.value })} placeholder="Central Delhi" className={`${F} mt-1.5`} />
+          </label>
+          <label className="text-sm font-medium">
+            <span className={L}>Zone</span>
+            <select value={form.zone} onChange={(e) => setForm({ ...form, zone: e.target.value, shipping: String(defaults[e.target.value] ?? 69) })} className={`${F} mt-1.5`}>
+              {["metro", "tier2", "tier3", "remote"].map((z) => (
+                <option key={z} value={z}>{z} (₹{defaults[z] ?? "—"})</option>
+              ))}
+            </select>
+          </label>
+          <label className="text-sm font-medium">
+            <span className={L}>Shipping charge (₹) *</span>
+            <input value={form.shipping} onChange={(e) => setForm({ ...form, shipping: e.target.value })} required type="number" min={0} max={100000} className={`${F} mt-1.5`} />
+          </label>
+        </div>
+        <div className="flex flex-wrap gap-4">
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={form.codAvailable} onChange={(e) => setForm({ ...form, codAvailable: e.target.checked })} className="h-4 w-4 accent-[var(--primary)]" /> COD available
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={form.serviceable} onChange={(e) => setForm({ ...form, serviceable: e.target.checked })} className="h-4 w-4 accent-[var(--primary)]" /> Serviceable
+          </label>
+        </div>
+        {err && <p role="alert" className="rounded-md border border-destructive/25 bg-destructive/[0.06] px-4 py-2.5 text-sm text-destructive">{err}</p>}
+        <button disabled={busy} className="rounded-md bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground hover:bg-cocoa disabled:opacity-60">
+          {busy ? "Saving…" : "Save pincode"}
+        </button>
+      </form>
+
+      {/* List */}
+      <div className="flex flex-wrap gap-2">
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search PIN, city, state…" className="min-w-0 flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm" />
+        <select value={zoneF} onChange={(e) => setZoneF(e.target.value)} className="rounded-md border border-input bg-background px-3 py-2 text-sm">
+          <option value="">All zones</option>
+          {["metro", "tier2", "tier3", "remote"].map((z) => <option key={z} value={z}>{z}</option>)}
+        </select>
+      </div>
+      <ul className="space-y-2">
+        {list.map((p) => (
+          <li key={p.pin} className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card p-3 text-sm">
+            <b className="font-mono">{p.pin}</b>
+            <span className="min-w-0 flex-1 truncate">{p.city}{p.district ? `, ${p.district}` : ""}, {p.state}</span>
+            <span className="rounded-full bg-gold/15 px-2.5 py-0.5 text-[11px] font-medium capitalize text-cocoa">{p.zone}</span>
+            <span className="font-semibold text-primary">₹{p.shipping}</span>
+            {!p.codAvailable && <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-[11px] text-destructive">No COD</span>}
+            {!p.serviceable && <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-[11px] text-destructive">Not serviceable</span>}
+            <button onClick={() => setForm({ pin: p.pin, city: p.city, state: p.state, district: p.district, zone: p.zone, shipping: String(p.shipping), codAvailable: p.codAvailable, serviceable: p.serviceable })} className="rounded-md border border-input px-3 py-1 text-xs hover:border-gold">Edit</button>
+            <button onClick={() => remove(p.pin)} className="text-xs text-destructive hover:underline">Delete</button>
+          </li>
+        ))}
+        {list.length === 0 && <p className="py-8 text-center text-sm text-muted-foreground">No custom pincodes yet — default zone charges apply.</p>}
+      </ul>
+    </div>
   );
 }

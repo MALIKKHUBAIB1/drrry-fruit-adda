@@ -125,6 +125,17 @@ export type DbAddress = {
 
 export type DbSubscriber = { email: string; createdAt: string };
 
+export type DbPincode = {
+  pin: string; // 6-digit
+  city: string;
+  state: string;
+  district: string;
+  zone: "metro" | "tier2" | "tier3" | "remote";
+  shipping: number; // charge in INR
+  codAvailable: boolean;
+  serviceable: boolean;
+};
+
 export type DbSettings = {
   promo: {
     enabled: boolean;
@@ -173,6 +184,7 @@ export type DbShape = {
   categories: DbCategory[];
   hampers: DbHamper[];
   coupons: DbCoupon[];
+  pincodes: DbPincode[];
   settings: DbSettings;
   orders: DbOrder[];
   contacts: DbContact[];
@@ -290,6 +302,52 @@ function seedUsers(): DbUser[] {
     mk("U-DEMO8", "Rohan Joshi", "rohan@example.com", 3),
   ];
 }
+
+function seedOrders(): DbOrder[] {
+  const now = Date.now();
+  const day = 24 * 60 * 60 * 1000;
+  const P = seedProducts;
+  const get = (slug: string) => P.find((x) => x.slug === slug)!;
+  const vv = (slug: string, label: string) => get(slug).variants.find((x) => x.label === label)!;
+  const mk = (id: string, userId: string, name: string, email: string, items: {slug:string;variant:string;qty:number}[], coupon: string | null, discount: number, payment: "cod"|"online", status: DbOrder["status"], daysAgo: number, city: string): DbOrder => {
+    const lines = items.map((it) => { const p = get(it.slug); const v = vv(it.slug, it.variant); return { slug: p.slug, name: p.name, variant: it.variant, qty: it.qty, price: v.price, mrp: v.mrp, image: p.image }; });
+    const subtotal = lines.reduce((s, l) => s + l.price * l.qty, 0);
+    const shipping = (subtotal - discount === 0 || subtotal - discount >= 999) ? 0 : 79;
+    const total = subtotal - discount + shipping;
+    return { id, userId, email, items: lines, subtotal, discount, shipping, total, coupon, name, phone: "9876543210", address: "123 Market Road", city, state: "MP", pin: "452001", notes: "", payment, status, createdAt: new Date(now - daysAgo*day).toISOString() };
+  };
+  return [
+    mk("DFA-SEED01", "U-DEMO1", "Priya Sharma", "priya@example.com", [{slug:"premium-almonds",variant:"500 g",qty:2},{slug:"jumbo-cashews",variant:"250 g",qty:1}], "WELCOME10", 70, "online", "delivered", 28, "Mumbai"),
+    mk("DFA-SEED02", "U-DEMO2", "Rahul Verma", "rahul@example.com", [{slug:"arabian-dates",variant:"500 g",qty:1},{slug:"golden-raisins",variant:"250 g",qty:2}], null, 0, "cod", "delivered", 24, "Delhi"),
+    mk("DFA-SEED03", "U-DEMO3", "Sneha Patel", "sneha@example.com", [{slug:"premium-gift-box",variant:"Classic (800 g)",qty:1}], "DRYFRUIT20", 299, "online", "shipped", 18, "Pune"),
+    mk("DFA-SEED04", "U-DEMO4", "Amit Kumar", "amit@example.com", [{slug:"california-pistachios",variant:"250 g",qty:3}], null, 0, "cod", "placed", 12, "Indore"),
+    mk("DFA-SEED05", "U-DEMO5", "Kavita Singh", "kavita@example.com", [{slug:"premium-anjeer",variant:"250 g",qty:2},{slug:"kashmiri-walnuts",variant:"250 g",qty:1}], "WELCOME10", 80, "online", "delivered", 9, "Jaipur"),
+    mk("DFA-SEED06", "U-DEMO6", "Vikram Mehta", "vikram@example.com", [{slug:"mixed-dry-fruit-combo",variant:"500 g",qty:2}], null, 0, "cod", "placed", 6, "Ahmedabad"),
+    mk("DFA-SEED07", "U-DEMO7", "Fatima Khan", "fatima@example.com", [{slug:"arabian-dates",variant:"1 kg",qty:1}], null, 0, "online", "delivered", 4, "Hyderabad"),
+    mk("DFA-SEED08", "U-DEMO3", "Sneha Patel", "sneha@example.com", [{slug:"premium-almonds",variant:"1 kg",qty:1}], null, 0, "cod", "cancelled", 2, "Pune"),
+    mk("DFA-SEED09", "U-DEMO1", "Priya Sharma", "priya@example.com", [{slug:"jumbo-cashews",variant:"500 g",qty:1},{slug:"golden-raisins",variant:"500 g",qty:1}], "WELCOME10", 60, "online", "placed", 1, "Mumbai"),
+  ];
+}
+function seedContacts(): DbContact[] {
+  const now = Date.now(); const day = 24*60*60*1000;
+  return [
+    { id:"C-SEED1", name:"Ramu", email:"ramu@x.in", phone:"", message:"Do you deliver to remote areas of Rajasthan?", createdAt: new Date(now-5*day).toISOString() },
+    { id:"C-SEED2", name:"Anita Desai", email:"anita@d.in", phone:"", message:"I want 50 gift boxes for corporate Diwali gifting. Bulk pricing?", createdAt: new Date(now-3*day).toISOString() },
+    { id:"C-SEED3", name:"Suresh K", email:"suresh@k.in", phone:"", message:"Medjool dates were excellent. Will order again.", createdAt: new Date(now-1*day).toISOString() },
+  ];
+}
+function seedNewsletter(): DbSubscriber[] {
+  const now = Date.now(); const day = 24*60*60*1000;
+  return ["newsletter1@example.com","newsletter2@example.com","newsletter3@example.com","newsletter4@example.com","newsletter5@example.com"]
+    .map((email,i) => ({ email, createdAt: new Date(now-(i+1)*day).toISOString() }));
+}
+
+function seedPincodes(): DbPincode[] {
+  // India Post API se live lookup hoga; yahan sirf zone defaults.
+  // Admin panel se pincode add/edit kar sakte hain.
+  return [];
+}
+
 function seed(): DbShape {
   const { salt, hash } = adminCreds();
   return {
@@ -310,6 +368,7 @@ function seed(): DbShape {
     categories: categories.map((c) => ({ ...c })),
     hampers: seedHampers(),
     settings: seedSettings(),
+    pincodes: seedPincodes(),
     coupons: [
       {
         code: "WELCOME10",
@@ -328,11 +387,11 @@ function seed(): DbShape {
         expiresAt: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString(),
       },
     ],
-    orders: [],
-    contacts: [],
+    orders: seedOrders(),
+    contacts: seedContacts(),
     reviews: seedReviews(),
     addresses: [],
-    newsletter: [],
+    newsletter: seedNewsletter(),
     carts: {},
     wishlists: {},
   };
@@ -347,7 +406,7 @@ function normalize(db: Partial<DbShape>): DbShape {
   }));
   // Admin user hamesha exist kare (purane DB me bhi).
   // Seed admin (U-ADMIN) ka password env se sync hota hai — env hi source of truth hai.
-  const seedAdmin = s.users[0];
+  const seedAdmin = s.users.find((u) => u.id === "U-ADMIN")!;
   const existingAdmin = users.find((u) => u.id === "U-ADMIN");
   if (existingAdmin) {
     existingAdmin.email = seedAdmin.email;
@@ -383,6 +442,7 @@ function normalize(db: Partial<DbShape>): DbShape {
       return [...existing, ...s.hampers.filter((h) => !seen.has(h.slug))];
     })(),
     settings: db.settings ?? s.settings,
+    pincodes: db.pincodes ?? s.pincodes,
     coupons: db.coupons ?? s.coupons,
     orders: db.orders ?? [],
     contacts: db.contacts ?? [],
