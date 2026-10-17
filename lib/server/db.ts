@@ -62,6 +62,8 @@ export type OrderItem = {
   image: string;
 };
 
+export type DbOrderStatus = "placed" | "packed" | "shipped" | "out-for-delivery" | "delivered" | "cancelled";
+
 export type DbOrder = {
   id: string;
   userId: string;
@@ -87,6 +89,10 @@ export type DbOrder = {
   razorpayOrderId?: string;
   paidAt?: string;
   status: "placed" | "shipped" | "delivered" | "cancelled";
+  statusHistory?: { status: DbOrderStatus; at: string; note?: string }[];
+  trackingNumber?: string;
+  trackingUrl?: string;
+  adminNote?: string;
   createdAt: string;
 };
 

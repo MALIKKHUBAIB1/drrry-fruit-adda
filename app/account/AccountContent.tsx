@@ -8,6 +8,7 @@ import { useAuth } from "@/lib/auth";
 import { useStore } from "@/lib/store";
 import { inr } from "@/lib/products";
 import { api, type ApiOrder } from "@/lib/api";
+import { useOrderStream } from "@/lib/useOrderStream";
 
 type Address = {
   id: string;
@@ -50,6 +51,8 @@ export default function AccountContent() {
       .catch(() => {})
       .finally(() => setOrdersLoading(false));
   };
+
+  useOrderStream(orders[0]?.id ?? null, loadOrders);
 
   useEffect(() => {
     loadOrders();

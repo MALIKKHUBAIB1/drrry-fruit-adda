@@ -1,32 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { readDb, updateDb, type DbOrder } from "@/lib/server/db";
+import { updateDb, type DbOrder } from "@/lib/server/db";
 import { ADMIN_DENIED, requireAdmin } from "@/lib/server/admin";
-import { cleanText, readJsonSafe, sameOrigin } from "@/lib/server/security";
+import { cleanText, readJsonSafe, safeUrl, sameOrigin } from "@/lib/server/security";
+import { ORDER_STATUSES, isOrderStatus, publish } from "@/lib/server/events";
 
-const STATUSES = ["placed", "shipped", "delivered", "cancelled"] as const;
-
-// GET /api/admin/orders?status=&q=
-export async function GET(req: NextRequest) {
-  const { status } = await requireAdmin(req);
-  if (status !== 200) return NextResponse.json({ error: ADMIN_DENIED(status) }, { status });
-
-  const sp = new URL(req.url).searchParams;
-  const filterStatus = cleanText(sp.get("status") ?? "", 20);
-  const q = cleanText(sp.get("q") ?? "", 80).toLowerCase();
-  const db = await readDb();
-  let orders = [...db.orders].sort(
-    (a, b) => +new Date(b.createdAt) - +new Date(a.createdAt),
-  );
-  if (filterStatus) orders = orders.filter((o) => o.status === filterStatus);
-  if (q) {
-    orders = orders.filter((o) =>
-      `${o.id} ${o.name} ${o.email} ${o.phone} ${o.city}`.toLowerCase().includes(q),
-    );
-  }
-  return NextResponse.json({ orders, count: orders.length });
-}
-
-// PATCH /api/admin/orders/:id { status }
+// PATCH /api/admin/orders/:id — status / tracking number / note update
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { status } = await requireAdmin(req);
   if (status !== 200) return NextResponse.json({ error: ADMIN_DENIED(status) }, { status });
@@ -41,20 +19,59 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
   const body = (parsed.data ?? {}) as Record<string, unknown>;
 
-  const next = cleanText(body.status, 20);
-  if (!(STATUSES as readonly string[]).includes(next)) {
+  const nextStatus = cleanText(body.status, 24);
+  const nextTracking = cleanText(body.trackingNumber, 60);
+  const nextTrackingUrl = safeUrl(body.trackingUrl);
+  const nextNote = cleanText(body.adminNote, 300);
+
+  if (nextStatus && !isOrderStatus(nextStatus)) {
     return NextResponse.json(
-      { error: `Status must be one of: ${STATUSES.join(", ")}.` },
+      { error: `Status must be one of: ${ORDER_STATUSES.join(", ")}.` },
       { status: 400 },
     );
   }
 
-  const order = await updateDb((db) => {
+  const result = await updateDb((db) => {
     const o = db.orders.find((x) => x.id === safeId);
-    if (!o) return null;
-    o.status = next as DbOrder["status"];
-    return o;
+    if (!o) return { error: "Order not found." as const };
+
+    let changed = false;
+
+    if (nextStatus && nextStatus !== o.status) {
+      o.status = nextStatus as DbOrder["status"];
+      o.statusHistory = [
+        ...(o.statusHistory ?? [{ status: o.status, at: o.createdAt }]),
+        { status: nextStatus as DbOrder["status"], at: new Date().toISOString() },
+      ];
+      changed = true;
+    }
+    if (body.trackingNumber !== undefined && nextTracking !== (o.trackingNumber ?? "")) {
+      o.trackingNumber = nextTracking || undefined;
+      changed = true;
+    }
+    if (body.trackingUrl !== undefined) {
+      o.trackingUrl = nextTrackingUrl || undefined;
+      changed = true;
+    }
+    if (body.adminNote !== undefined && nextNote !== (o.adminNote ?? "")) {
+      o.adminNote = nextNote || undefined;
+      changed = true;
+    }
+
+    if (!o.statusHistory?.length) {
+      o.statusHistory = [{ status: o.status, at: o.createdAt }];
+    }
+    return { order: o, changed };
   });
-  if (!order) return NextResponse.json({ error: "Order not found." }, { status: 404 });
-  return NextResponse.json({ order });
+
+  if ("error" in result) {
+    return NextResponse.json({ error: result.error }, { status: 404 });
+  }
+
+  // Live update — customers tracking the order see this instantly
+  if (result.changed) {
+    publish({ orderId: result.order.id, status: result.order.status });
+  }
+
+  return NextResponse.json({ order: result.order });
 }

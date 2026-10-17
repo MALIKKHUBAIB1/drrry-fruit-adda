@@ -378,49 +378,223 @@ function MiniKpi({ label, value, sub, warn }: { label: string; value: number; su
   );
 }
 
+type DraftOrder = {
+  status: string;
+  trackingNumber: string;
+  trackingUrl: string;
+  adminNote: string;
+};
+
+const ORDER_STATUSES_UI = [
+  ["placed", "Order Placed"],
+  ["packed", "Packed"],
+  ["shipped", "Shipped"],
+  ["out-for-delivery", "Out for Delivery"],
+  ["delivered", "Delivered"],
+  ["cancelled", "Cancelled"],
+] as const;
+
 function OrdersTab({ orders, reload }: { orders: any[]; reload: () => void }) {
   const [q, setQ] = useState("");
   const [st, setSt] = useState("");
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<Record<string, DraftOrder>>({});
+  const [saving, setSaving] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
   const list = orders.filter(
     (o) =>
       (!st || o.status === st) &&
-      (!q || `${o.id} ${o.name} ${o.email} ${o.phone}`.toLowerCase().includes(q.toLowerCase())),
+      (!q ||
+        `${o.id} ${o.name} ${o.email} ${o.phone} ${o.trackingNumber ?? ""}`
+          .toLowerCase()
+          .includes(q.toLowerCase())),
   );
-  const setStatus = async (id: string, status: string) => {
-    await j(`/api/admin/orders/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }) });
-    reload();
+
+  const draftFor = (o: any): DraftOrder =>
+    draft[o.id] ?? {
+      status: o.status,
+      trackingNumber: o.trackingNumber ?? "",
+      trackingUrl: o.trackingUrl ?? "",
+      adminNote: o.adminNote ?? "",
+    };
+
+  const toggle = (o: any) => {
+    if (openId === o.id) {
+      setOpenId(null);
+      return;
+    }
+    setDraft((d) => ({ ...d, [o.id]: draftFor(o) }));
+    setOpenId(o.id);
   };
+
+  const setField = (id: string, base: any, patch: Partial<DraftOrder>) =>
+    setDraft((d) => ({ ...d, [id]: { ...draftFor(base), ...patch } }));
+
+  const save = async (o: any) => {
+    setSaving(o.id);
+    setErr(null);
+    try {
+      await j(`/api/admin/orders/${o.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(draftFor(o)),
+      });
+      setDraft((prev) => {
+        const next = { ...prev };
+        delete next[o.id];
+        return next;
+      });
+      setOpenId(null);
+      reload();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Couldn't update order.");
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  const labelOf = (v: string) => ORDER_STATUSES_UI.find(([k]) => k === v)?.[1] ?? v;
+
   return (
     <div>
       <div className="flex flex-wrap gap-2">
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search id, name, phone…" className="min-w-0 flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm" />
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search id, name, phone, tracking…" className="min-w-0 flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm" />
         <select value={st} onChange={(e) => setSt(e.target.value)} className="rounded-md border border-input bg-background px-3 py-2 text-sm">
           <option value="">All statuses</option>
-          {["placed", "shipped", "delivered", "cancelled"].map((s) => (
-            <option key={s} value={s}>{s}</option>
+          {ORDER_STATUSES_UI.map(([k, l]) => (
+            <option key={k} value={k}>{l}</option>
           ))}
         </select>
       </div>
+
+      {err && (
+        <p role="alert" className="mt-3 rounded-md border border-destructive/25 bg-destructive/[0.06] px-4 py-2.5 text-sm text-destructive">{err}</p>
+      )}
+
       <ul className="mt-4 space-y-3">
-        {list.map((o) => (
-          <li key={o.id} className="rounded-xl border border-border bg-card p-4 text-sm">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="font-mono font-semibold">{o.id}</span>
-              <select value={o.status} onChange={(e) => setStatus(o.id, e.target.value)} className="rounded-md border border-input bg-background px-2 py-1 text-xs">
-                {["placed", "shipped", "delivered", "cancelled"].map((s) => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
-            </div>
-            <p className="mt-1 text-muted-foreground">
-              {o.name} · {o.phone} · {o.city} {o.pin} · {new Date(o.createdAt).toLocaleString("en-IN")}
-            </p>
-            <p className="mt-1">
-              {o.items.map((it: any) => `${it.name} (${it.variant} × ${it.qty})`).join(", ")}
-            </p>
-            <p className="mt-1 font-semibold text-primary">Total {inr(o.total)} {o.coupon && <span className="text-xs font-normal text-muted-foreground">({o.coupon})</span>}</p>
-          </li>
-        ))}
+        {list.map((o) => {
+          const d = draftFor(o);
+          const isOpen = openId === o.id;
+          return (
+            <li key={o.id} className="rounded-xl border border-border bg-card p-4 text-sm">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="font-mono font-semibold">{o.id}</span>
+                <div className="flex items-center gap-2">
+                  <span
+                    className={cn(
+                      "rounded-full px-2.5 py-0.5 text-[11px] font-medium",
+                      o.status === "delivered"
+                        ? "bg-green-100 text-green-700"
+                        : o.status === "cancelled"
+                          ? "bg-destructive/10 text-destructive"
+                          : "bg-gold/20 text-cocoa",
+                    )}
+                  >
+                    {labelOf(o.status)}
+                  </span>
+                  <button
+                    onClick={() => toggle(o)}
+                    className="rounded-md border border-input px-3 py-1 text-xs hover:border-gold"
+                  >
+                    {isOpen ? "Close" : "Manage"}
+                  </button>
+                </div>
+              </div>
+
+              <p className="mt-1 text-muted-foreground">
+                {o.name} · {o.phone} · {o.city} {o.pin} ·{" "}
+                {new Date(o.createdAt).toLocaleString("en-IN")}
+              </p>
+              <p className="mt-1">
+                {o.items.map((it: any) => `${it.name} (${it.variant} × ${it.qty})`).join(", ")}
+              </p>
+              <p className="mt-1 font-semibold text-primary">
+                Total {inr(o.total)}{" "}
+                {o.coupon && <span className="text-xs font-normal text-muted-foreground">({o.coupon})</span>}
+                {o.deliveryLabel && (
+                  <span className="ml-2 text-xs font-normal text-muted-foreground">
+                    {o.deliveryLabel}
+                  </span>
+                )}
+              </p>
+              {o.trackingNumber && !isOpen && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Tracking: <span className="font-mono">{o.trackingNumber}</span>
+                </p>
+              )}
+
+              {isOpen && (
+                <div className="mt-4 space-y-3 rounded-lg border border-border bg-secondary/40 p-4">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="text-sm font-medium">
+                      <span className="text-xs uppercase tracking-wider text-muted-foreground">Status</span>
+                      <select
+                        value={d.status}
+                        onChange={(e) => setField(o.id, o, { status: e.target.value })}
+                        className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      >
+                        {ORDER_STATUSES_UI.map(([k, l]) => (
+                          <option key={k} value={k}>{l}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="text-sm font-medium">
+                      <span className="text-xs uppercase tracking-wider text-muted-foreground">Tracking number</span>
+                      <input
+                        value={d.trackingNumber}
+                        onChange={(e) => setField(o.id, o, { trackingNumber: e.target.value })}
+                        placeholder="e.g. 1234567890"
+                        className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-sm"
+                      />
+                    </label>
+                    <label className="text-sm font-medium sm:col-span-2">
+                      <span className="text-xs uppercase tracking-wider text-muted-foreground">Tracking link (optional)</span>
+                      <input
+                        value={d.trackingUrl}
+                        onChange={(e) => setField(o.id, o, { trackingUrl: e.target.value })}
+                        placeholder="https://"
+                        className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      />
+                    </label>
+                    <label className="text-sm font-medium sm:col-span-2">
+                      <span className="text-xs uppercase tracking-wider text-muted-foreground">Note for customer</span>
+                      <textarea
+                        value={d.adminNote}
+                        onChange={(e) => setField(o.id, o, { adminNote: e.target.value })}
+                        rows={2}
+                        placeholder="e.g. Packed and ready, arriving tomorrow"
+                        className="mt-1.5 w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      />
+                    </label>
+                  </div>
+
+                  <button
+                    onClick={() => save(o)}
+                    disabled={saving === o.id}
+                    className="rounded-md bg-primary px-5 py-2 text-sm font-medium text-primary-foreground hover:bg-cocoa disabled:opacity-60"
+                  >
+                    {saving === o.id ? "Saving…" : "Save & notify customer"}
+                  </button>
+
+                  {o.statusHistory?.length > 0 && (
+                    <div className="border-t border-border pt-3">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">History</p>
+                      <ol className="mt-1.5 space-y-1">
+                        {[...o.statusHistory].reverse().map((h: any, i: number) => (
+                          <li key={i} className="text-xs text-muted-foreground">
+                            <b className="text-foreground">{labelOf(h.status)}</b> ·{" "}
+                            {new Date(h.at).toLocaleString("en-IN")}
+                          </li>
+                        ))}
+                      </ol>
+                    </div>
+                  )}
+                </div>
+              )}
+            </li>
+          );
+        })}
         {list.length === 0 && <p className="py-10 text-center text-sm text-muted-foreground">No orders found.</p>}
       </ul>
     </div>
@@ -498,6 +672,7 @@ const fromProduct = (p: any): ProductForm => ({
   metaTitle: p.metaTitle ?? "",
   metaDescription: p.metaDescription ?? "",
 });
+
 
 function ProductsTab({ products, cats, reload }: { products: any[]; cats: any[]; reload: () => void }) {
   const [editor, setEditor] = useState<{ isNew: boolean; slugTouched: boolean; form: ProductForm } | null>(null);

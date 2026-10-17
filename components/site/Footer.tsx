@@ -28,6 +28,7 @@ export function Footer() {
           <h3 className="mb-4 font-display text-xl text-gold">Help</h3>
           <ul className="space-y-2 text-sm text-cocoa-foreground/80">
             <li><Link href="/about">About Us</Link></li>
+            <li><Link href="/track">Track Your Order</Link></li>
             <li><Link href="/contact">Contact Us</Link></li>
             <li><Link href="/policies/shipping">Shipping Policy</Link></li>
             <li><Link href="/policies/returns">Return & Refund Policy</Link></li>

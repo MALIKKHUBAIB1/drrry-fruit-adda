@@ -166,6 +166,7 @@ export async function POST(req: NextRequest) {
       deliveryLabel: optLabel,
       deliveryDays: optDays,
       status: "placed",
+      statusHistory: [{ status: "placed", at: new Date().toISOString() }],
       createdAt: new Date().toISOString(),
     };
     db.orders.unshift(o);
