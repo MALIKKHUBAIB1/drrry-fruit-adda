@@ -57,19 +57,19 @@ export default function ContactForm({ labelCls, inputCls }: { labelCls: string; 
     >
       <label className={labelCls}>
         Name
-        <input required name="name" autoComplete="name" className={inputCls} />
+        <input required name="name" autoComplete="name" minLength={2} maxLength={80} className={inputCls} />
       </label>
       <label className={labelCls}>
         Email
-        <input required name="email" type="email" autoComplete="email" className={inputCls} />
+        <input required name="email" type="email" autoComplete="email" minLength={5} maxLength={254} className={inputCls} />
       </label>
       <label className={labelCls}>
         Phone
-        <input name="phone" autoComplete="tel" inputMode="numeric" className={inputCls} />
+        <input name="phone" autoComplete="tel" inputMode="numeric" maxLength={10} pattern="[6-9][0-9]{9}" className={inputCls} />
       </label>
       <label className={labelCls}>
         Message
-        <textarea required name="message" rows={5} className={`${inputCls} resize-y`} />
+        <textarea required name="message" rows={5} minLength={5} maxLength={2000} className={`${inputCls} resize-y`} />
       </label>
       {err && (
         <p role="alert" className="text-sm text-destructive">

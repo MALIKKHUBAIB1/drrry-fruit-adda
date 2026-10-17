@@ -47,6 +47,9 @@ export type DbCoupon = {
   min: number;
   label: string;
   active: boolean;
+  expiresAt?: string; // ISO date, optional
+  usageLimit?: number; // max uses, optional
+  usedCount?: number;
 };
 
 export type OrderItem = {
@@ -122,10 +125,45 @@ export type DbAddress = {
 
 export type DbSubscriber = { email: string; createdAt: string };
 
+export type DbSettings = {
+  promo: {
+    enabled: boolean;
+    title: string;
+    subtitle: string;
+    couponCode: string;
+    expiresAt: string; // ISO
+    ctaLabel: string;
+    ctaHref: string;
+    bgColor: string; // tailwind-ish hex
+  };
+};
+
 export type DbCategory = {
   slug: string;
   name: string;
   image: string;
+};
+
+export type DbHamperItem = { slug: string; name: string; qty: number };
+
+export type DbHamper = {
+  id: string;
+  slug: string;
+  name: string;
+  image: string;
+  description: string;
+  highlights: string[];
+  price: number;
+  mrp: number;
+  items: DbHamperItem[]; // jo dry fruits andar hain
+  badge?: "Best Seller" | "New Arrival";
+  inStock: boolean;
+  rating: number;
+  reviews: number;
+  metaTitle?: string;
+  metaDescription?: string;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type DbShape = {
@@ -133,7 +171,9 @@ export type DbShape = {
   sessions: DbSession[];
   products: Product[];
   categories: DbCategory[];
+  hampers: DbHamper[];
   coupons: DbCoupon[];
+  settings: DbSettings;
   orders: DbOrder[];
   contacts: DbContact[];
   reviews: DbReview[];
@@ -184,10 +224,77 @@ function seedReviews(): DbReview[] {
   ];
 }
 
+function seedHampers(): DbHamper[] {
+  const now = new Date().toISOString();
+  return [
+    {
+      id: "H-PREMIUM-GIFT-BOX",
+      slug: "premium-gift-box",
+      name: "Signature Dry Fruit Gift Box",
+      image: "/images/gift.jpg",
+      description: "Almonds, cashews, pistachios and dates in an elegant gold-accented keepsake box.",
+      highlights: ["Four premium varieties", "Gold-foil keepsake box", "Ideal for festivals & corporate gifting"],
+      price: 1499,
+      mrp: 1799,
+      items: [
+        { slug: "premium-almonds", name: "Premium California Almonds", qty: 1 },
+        { slug: "jumbo-cashews", name: "Jumbo W240 Cashews", qty: 1 },
+        { slug: "california-pistachios", name: "Roasted Salted Pistachios", qty: 1 },
+        { slug: "arabian-dates", name: "Arabian Medjool Dates", qty: 1 },
+      ],
+      badge: "Best Seller",
+      inStock: true,
+      rating: 4.9,
+      reviews: 58,
+      createdAt: now,
+      updatedAt: now,
+    },
+  ];
+}
+function seedSettings(): DbSettings {
+  const now = Date.now();
+  return {
+    promo: {
+      enabled: true,
+      title: "Special Offers on Premium Gift Boxes",
+      subtitle: "Free Shipping on Orders Above ₹999",
+      couponCode: "WELCOME10",
+      expiresAt: new Date(now + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      ctaLabel: "Shop Gift Hampers",
+      ctaHref: "/shop?group=gift-hampers",
+      bgColor: "#3a2e22",
+    },
+  };
+}
+function seedUsers(): DbUser[] {
+  const { salt, hash } = hashPassword("Demo@123");
+  const now = Date.now();
+  const day = 24 * 60 * 60 * 1000;
+  const mk = (id: string, name: string, email: string, daysAgo: number): DbUser => ({
+    id,
+    name,
+    email,
+    passHash: hash,
+    salt,
+    isAdmin: false,
+    createdAt: new Date(now - daysAgo * day).toISOString(),
+  });
+  return [
+    mk("U-DEMO1", "Priya Sharma", "priya@example.com", 30),
+    mk("U-DEMO2", "Rahul Verma", "rahul@example.com", 25),
+    mk("U-DEMO3", "Sneha Patel", "sneha@example.com", 20),
+    mk("U-DEMO4", "Amit Kumar", "amit@example.com", 15),
+    mk("U-DEMO5", "Kavita Singh", "kavita@example.com", 10),
+    mk("U-DEMO6", "Vikram Mehta", "vikram@example.com", 8),
+    mk("U-DEMO7", "Fatima Khan", "fatima@example.com", 5),
+    mk("U-DEMO8", "Rohan Joshi", "rohan@example.com", 3),
+  ];
+}
 function seed(): DbShape {
   const { salt, hash } = adminCreds();
   return {
     users: [
+      ...seedUsers(),
       {
         id: "U-ADMIN",
         name: "Store Admin",
@@ -201,6 +308,8 @@ function seed(): DbShape {
     sessions: [],
     products: seedProducts,
     categories: categories.map((c) => ({ ...c })),
+    hampers: seedHampers(),
+    settings: seedSettings(),
     coupons: [
       {
         code: "WELCOME10",
@@ -208,6 +317,7 @@ function seed(): DbShape {
         min: 499,
         label: "10% off on orders above ₹499",
         active: true,
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
       },
       {
         code: "DRYFRUIT20",
@@ -215,6 +325,7 @@ function seed(): DbShape {
         min: 1499,
         label: "20% off on orders above ₹1,499",
         active: true,
+        expiresAt: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString(),
       },
     ],
     orders: [],
@@ -266,6 +377,12 @@ function normalize(db: Partial<DbShape>): DbShape {
       const seen = new Set(existing.map((c) => c.slug));
       return [...existing, ...s.categories.filter((c) => !seen.has(c.slug))];
     })(),
+    hampers: (() => {
+      const existing = db.hampers?.length ? db.hampers : s.hampers;
+      const seen = new Set(existing.map((h) => h.slug));
+      return [...existing, ...s.hampers.filter((h) => !seen.has(h.slug))];
+    })(),
+    settings: db.settings ?? s.settings,
     coupons: db.coupons ?? s.coupons,
     orders: db.orders ?? [],
     contacts: db.contacts ?? [],
@@ -322,7 +439,13 @@ export async function getCategories() {
   return db.categories;
 }
 
-// ---------- Pricing helpers (server-side authoritative totals) ----------
+// ---------- Coupon validity helper ----------
+export function couponStatus(c: DbCoupon): "active" | "expired" | "disabled" | "limit-reached" {
+  if (!c.active) return "disabled";
+  if (c.expiresAt && new Date(c.expiresAt).getTime() < Date.now()) return "expired";
+  if (c.usageLimit && (c.usedCount ?? 0) >= c.usageLimit) return "limit-reached";
+  return "active";
+}
 
 export const SHIPPING_FREE_ABOVE = 999;
 export const shippingFor = (net: number) =>

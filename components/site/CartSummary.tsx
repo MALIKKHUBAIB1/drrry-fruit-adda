@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { BadgeCheck, Lock, Ticket, Truck } from "lucide-react";
 import { inr } from "@/lib/products";
 import { COUPONS, SHIPPING_FREE_ABOVE, useStore } from "@/lib/store";
@@ -47,6 +47,19 @@ export function FreeShippingBar({ compact }: { compact?: boolean }) {
 export function CouponForm() {
   const { coupon, couponError, applyCoupon, removeCoupon } = useStore();
   const [code, setCode] = useState("");
+  const [coupons, setCoupons] = useState<Record<string, { code: string; pct: number; min: number; label: string; status?: string; expiresAt?: string }>>({});
+
+  useEffect(() => {
+    fetch("/api/coupons", { credentials: "include" })
+      .then((r) => r.json())
+      .then((d) => {
+        const m: typeof coupons = {};
+        (d.coupons ?? []).forEach((c: { code: string; pct: number; min: number; label: string; status?: string; expiresAt?: string }) => { m[c.code] = c; });
+        setCoupons(m);
+      })
+      .catch(() => {});
+  }, []);
+
   if (coupon) {
     return (
       <div className="flex items-center justify-between rounded-md border border-primary/40 bg-primary/5 px-3 py-2 text-sm">
@@ -63,6 +76,10 @@ export function CouponForm() {
       </div>
     );
   }
+
+  const expired = Object.values(coupons).filter((c) => c.status === "expired");
+  const active = Object.values(coupons).filter((c) => c.status === "active");
+
   return (
     <div>
       <form
@@ -88,20 +105,43 @@ export function CouponForm() {
           {couponError}
         </p>
       )}
-      <div className="mt-2 flex flex-wrap gap-1.5">
-        {Object.values(COUPONS).map((c) => (
-          <button
-            key={c.code}
-            title={c.label}
-            onClick={() => {
-              if (applyCoupon(c.code)) setCode("");
-            }}
-            className="rounded-full border border-dashed border-gold px-2.5 py-1 text-[11px] font-medium text-primary hover:bg-gold/10"
-          >
-            {c.code} · {c.pct}% off
-          </button>
-        ))}
-      </div>
+
+      {/* Active coupons */}
+      {active.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {active.map((c) => (
+            <button
+              key={c.code}
+              title={c.label}
+              onClick={() => {
+                if (applyCoupon(c.code)) setCode("");
+              }}
+              className="rounded-full border border-dashed border-gold px-2.5 py-1 text-[11px] font-medium text-primary hover:bg-gold/10"
+            >
+              {c.code} · {c.pct}% off
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Expired coupons — top level banner */}
+      {expired.length > 0 && (
+        <div className="mt-3 rounded-lg border border-destructive/30 bg-destructive/[0.06] p-3">
+          <p className="text-xs font-semibold uppercase tracking-wider text-destructive">
+            Expired coupons
+          </p>
+          <ul className="mt-1.5 space-y-1">
+            {expired.map((c) => (
+              <li key={c.code} className="flex items-center justify-between text-xs">
+                <span className="font-mono font-medium text-foreground/70 line-through">{c.code}</span>
+                <span className="text-destructive">
+                  Expired{c.expiresAt ? ` on ${new Date(c.expiresAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}` : ""}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

@@ -7,6 +7,7 @@ import { ShieldAlert } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { categories, inr } from "@/lib/products";
 import { cn } from "@/lib/utils";
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, PieChart, Pie, Cell, Legend, LineChart, Line } from "recharts";
 
 async function j(path: string, init?: RequestInit) {
   const res = await fetch(path, { credentials: "include", ...init });
@@ -15,7 +16,7 @@ async function j(path: string, init?: RequestInit) {
   return data;
 }
 
-const TABS = ["Overview", "Orders", "Products", "Categories", "Coupons", "Users", "Messages", "Reviews"] as const;
+const TABS = ["Overview", "Orders", "Products", "Categories", "Gift Hampers", "Promo Banner", "Coupons", "Users", "Messages", "Reviews"] as const;
 type Tab = (typeof TABS)[number];
 
 export default function AdminContent() {
@@ -27,6 +28,8 @@ export default function AdminContent() {
   const [orders, setOrders] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [cats, setCats] = useState<any[]>([]);
+  const [hampers, setHampers] = useState<any[]>([]);
+  const [promo, setPromo] = useState<any>(null);
   const [coupons, setCoupons] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [contacts, setContacts] = useState<any[]>([]);
@@ -37,11 +40,13 @@ export default function AdminContent() {
   const load = useCallback(async () => {
     setErr(null);
     try {
-      const [s, o, p, cg, c, u, m, n, r] = await Promise.all([
+      const [s, o, p, cg, hg, pg, c, u, m, n, r] = await Promise.all([
         j("/api/admin/stats"),
         j("/api/admin/orders"),
         j("/api/admin/products"),
         j("/api/admin/categories"),
+        j("/api/admin/hampers"),
+        j("/api/settings"),
         j("/api/admin/coupons"),
         j("/api/admin/users"),
         j("/api/admin/contacts"),
@@ -52,6 +57,8 @@ export default function AdminContent() {
       setOrders(o.orders);
       setProducts(p.products);
       setCats(cg.categories);
+      setHampers(hg.hampers);
+      setPromo(pg.settings?.promo ?? null);
       setCoupons(c.coupons);
       setUsers(u.users);
       setContacts(m.contacts);
@@ -98,6 +105,8 @@ export default function AdminContent() {
           {tab === "Orders" && "View and update customer orders."}
           {tab === "Products" && "Manage catalogue, price and stock."}
           {tab === "Categories" && "Shop-by-category tiles on the home page."}
+          {tab === "Gift Hampers" && "Curated gift hampers with multiple items."}
+          {tab === "Promo Banner" && "Home page offer banner with live countdown."}
           {tab === "Coupons" && "Create and manage discount codes."}
           {tab === "Users" && "Customers and admin access."}
           {tab === "Messages" && "Contact messages and subscribers."}
@@ -118,6 +127,8 @@ export default function AdminContent() {
         {tab === "Orders" && <OrdersTab orders={orders} reload={load} />}
         {tab === "Products" && <ProductsTab products={products} cats={cats} reload={load} />}
         {tab === "Categories" && <CategoriesTab cats={cats} reload={load} />}
+        {tab === "Gift Hampers" && <HampersTab hampers={hampers} reload={load} />}
+        {tab === "Promo Banner" && <PromoTab promo={promo} reload={load} />}
         {tab === "Coupons" && <CouponsTab coupons={coupons} reload={load} />}
         {tab === "Users" && <UsersTab users={users} reload={load} />}
         {tab === "Messages" && <MessagesTab contacts={contacts} subs={subs} reload={load} />}
@@ -137,44 +148,230 @@ function Card({ label, value }: { label: string; value: string }) {
 }
 
 function Overview({ stats }: { stats: Record<string, any> }) {
+  const COLORS = ["#c9a227", "#3a2e22", "#16a34a", "#dc2626"];
+  const STATUS_LABEL: Record<string, string> = {
+    placed: "Placed",
+    shipped: "Shipped",
+    delivered: "Delivered",
+    cancelled: "Cancelled",
+  };
+
   return (
     <div className="space-y-6">
+      {/* KPI row 1 */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Card label="Revenue" value={inr(stats.revenue)} />
-        <Card label="Orders" value={String(stats.orders)} />
-        <Card label="Users" value={String(stats.users)} />
-        <Card label="Avg order" value={inr(stats.avgOrderValue)} />
+        <KpiCard label="Revenue" value={inr(stats.revenue)} sub={`${stats.liveOrders} paid orders`} tone="gold" icon="₹" />
+        <KpiCard label="Orders" value={String(stats.orders)} sub={`${stats.byStatus.find((s: any) => s.status === "placed")?.count ?? 0} pending`} tone="primary" />
+        <KpiCard label="Customers" value={String(stats.customers)} sub={`${stats.adminUsers} admins`} tone="primary" />
+        <KpiCard label="Avg order" value={inr(stats.avgOrderValue)} sub={`Rating ${stats.avgRating}★`} tone="gold" />
       </div>
+
+      {/* KPI row 2 */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <MiniKpi label="Products" value={stats.products} sub={`${stats.inStockProducts} in stock`} />
+        <MiniKpi label="Out of stock" value={stats.lowStock} sub="need restock" warn={stats.lowStock > 0} />
+        <MiniKpi label="Hampers" value={stats.hampers} />
+        <MiniKpi label="Categories" value={stats.categories} />
+        <MiniKpi label="Reviews" value={stats.reviews} sub={`${stats.avgRating} avg`} />
+        <MiniKpi label="Messages" value={stats.pendingContacts} sub={`${stats.subscribers} subs`} />
+      </div>
+
+      {/* Charts row */}
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* Revenue line chart (7 days) */}
+        <div className="rounded-2xl border border-border bg-card p-5 shadow-sm lg:col-span-2">
+          <div className="flex items-center justify-between">
+            <h3 className="font-display text-lg font-semibold text-primary">Revenue — last 7 days</h3>
+            <span className="text-xs text-muted-foreground">₹{stats.revenue.toLocaleString("en-IN")} total</span>
+          </div>
+          <div className="mt-4 h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={stats.days} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e0d6" />
+                <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#6b6258" }} />
+                <YAxis tick={{ fontSize: 11, fill: "#6b6258" }} tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} />
+                <Tooltip
+                  contentStyle={{ borderRadius: 12, border: "1px solid #e5e0d6", fontSize: 12 }}
+                  formatter={(v: number) => [`₹${v.toLocaleString("en-IN")}`, "Revenue"]}
+                />
+                <Line type="monotone" dataKey="revenue" stroke="#c9a227" strokeWidth={3} dot={{ r: 4, fill: "#c9a227" }} activeDot={{ r: 6 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Status pie */}
+        <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+          <h3 className="font-display text-lg font-semibold text-primary">Orders by status</h3>
+          <div className="mt-2 h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={stats.byStatus}
+                  dataKey="count"
+                  nameKey="status"
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={50}
+                  outerRadius={80}
+                  paddingAngle={3}
+                >
+                  {stats.byStatus.map((_: any, i: number) => (
+                    <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip contentStyle={{ borderRadius: 12, fontSize: 12 }} />
+                <Legend
+                  verticalAlign="bottom"
+                  iconType="circle"
+                  formatter={(v: string) => STATUS_LABEL[v] ?? v}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
+      {/* Payment split + categories */}
       <div className="grid gap-6 lg:grid-cols-2">
-        <div className="rounded-xl border border-border bg-card p-5">
-          <h3 className="font-semibold">Orders by status</h3>
-          <ul className="mt-3 space-y-2 text-sm">
-            {stats.byStatus.map((s: any) => (
-              <li key={s.status} className="flex justify-between">
-                <span className="capitalize">{s.status}</span>
-                <b>{s.count}</b>
+        <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+          <h3 className="font-display text-lg font-semibold text-primary">Payment methods</h3>
+          <div className="mt-4 h-52">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={[
+                { name: "COD", orders: stats.codCount, revenue: stats.codRevenue },
+                { name: "Online", orders: stats.onlineCount, revenue: stats.onlineRevenue },
+              ]}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e0d6" />
+                <XAxis dataKey="name" tick={{ fontSize: 12, fill: "#6b6258" }} />
+                <YAxis tick={{ fontSize: 11, fill: "#6b6258" }} />
+                <Tooltip contentStyle={{ borderRadius: 12, fontSize: 12 }} />
+                <Bar dataKey="orders" fill="#c9a227" radius={[8, 8, 0, 0]} />
+                <Bar dataKey="revenue" fill="#3a2e22" radius={[8, 8, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="mt-3 flex justify-around text-xs text-muted-foreground">
+            <span>COD: {stats.codCount} orders · {inr(stats.codRevenue)}</span>
+            <span>Online: {stats.onlineCount} orders · {inr(stats.onlineRevenue)}</span>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+          <h3 className="font-display text-lg font-semibold text-primary">Revenue by category</h3>
+          <div className="mt-4 h-52">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={stats.topCategories} layout="vertical" margin={{ left: 10 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e0d6" />
+                <XAxis type="number" tick={{ fontSize: 10, fill: "#6b6258" }} tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} />
+                <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: "#6b6258" }} width={90} />
+                <Tooltip contentStyle={{ borderRadius: 12, fontSize: 12 }} formatter={(v: number) => `₹${v.toLocaleString("en-IN")}`} />
+                <Bar dataKey="revenue" fill="#c9a227" radius={[0, 8, 8, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
+      {/* Top products + top customers */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+          <h3 className="font-display text-lg font-semibold text-primary">Top products by revenue</h3>
+          <ul className="mt-3 space-y-2">
+            {stats.topProducts.map((p: any, i: number) => (
+              <li key={p.slug} className="flex items-center gap-3 text-sm">
+                <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-gold/15 text-xs font-bold text-primary">{i + 1}</span>
+                <span className="min-w-0 flex-1 truncate">{p.name}</span>
+                <span className="text-muted-foreground">×{p.qty}</span>
+                <b className="shrink-0 text-primary">{inr(p.revenue)}</b>
               </li>
             ))}
+            {stats.topProducts.length === 0 && <p className="py-6 text-center text-sm text-muted-foreground">No sales yet.</p>}
           </ul>
         </div>
-        <div className="rounded-xl border border-border bg-card p-5">
-          <h3 className="font-semibold">Top products</h3>
-          <ul className="mt-3 space-y-2 text-sm">
-            {(stats.topProducts ?? []).map((p: any) => (
-              <li key={p.slug} className="flex justify-between gap-2">
-                <span className="truncate">{p.name} <span className="text-muted-foreground">× {p.qty}</span></span>
-                <b className="shrink-0">{inr(p.revenue)}</b>
+
+        <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+          <h3 className="font-display text-lg font-semibold text-primary">Top customers</h3>
+          <ul className="mt-3 space-y-2">
+            {stats.topCustomers.map((c: any, i: number) => (
+              <li key={i} className="flex items-center gap-3 text-sm">
+                <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-primary/10 text-xs font-bold text-primary">
+                  {c.name.trim().charAt(0).toUpperCase()}
+                </span>
+                <span className="min-w-0 flex-1 truncate">
+                  {c.name}
+                  <span className="block truncate text-xs text-muted-foreground">{c.email}</span>
+                </span>
+                <span className="text-muted-foreground">{c.orders} orders</span>
+                <b className="shrink-0 text-primary">{inr(c.spent)}</b>
               </li>
             ))}
+            {stats.topCustomers.length === 0 && <p className="py-6 text-center text-sm text-muted-foreground">No customers yet.</p>}
           </ul>
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Card label="Products" value={String(stats.products)} />
-        <Card label="Reviews" value={String(stats.reviews)} />
-        <Card label="Messages" value={String(stats.pendingContacts)} />
-        <Card label="Subscribers" value={String(stats.subscribers)} />
+
+      {/* Recent orders */}
+      <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+        <h3 className="font-display text-lg font-semibold text-primary">Recent orders</h3>
+        <div className="mt-3 overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border text-left text-xs uppercase tracking-wider text-muted-foreground">
+                <th className="py-2 pr-4">Order</th>
+                <th className="py-2 pr-4">Customer</th>
+                <th className="py-2 pr-4">Payment</th>
+                <th className="py-2 pr-4">Status</th>
+                <th className="py-2 pr-4 text-right">Total</th>
+                <th className="py-2 text-right">When</th>
+              </tr>
+            </thead>
+            <tbody>
+              {stats.recentOrders.map((o: any) => (
+                <tr key={o.id} className="border-b border-border/50">
+                  <td className="py-2.5 pr-4 font-mono text-xs">{o.id}</td>
+                  <td className="py-2.5 pr-4">{o.name}</td>
+                  <td className="py-2.5 pr-4 text-xs uppercase">{o.payment}</td>
+                  <td className="py-2.5 pr-4">
+                    <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium", o.status === "delivered" ? "bg-green-100 text-green-700" : o.status === "cancelled" ? "bg-red-100 text-red-700" : "bg-gold/20 text-cocoa")}>
+                      {o.status}
+                    </span>
+                  </td>
+                  <td className="py-2.5 pr-4 text-right font-semibold text-primary">{inr(o.total)}</td>
+                  <td className="py-2.5 text-right text-xs text-muted-foreground">{new Date(o.createdAt).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</td>
+                </tr>
+              ))}
+              {stats.recentOrders.length === 0 && (
+                <tr><td colSpan={6} className="py-8 text-center text-sm text-muted-foreground">No orders yet.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
+    </div>
+  );
+}
+
+function KpiCard({ label, value, sub, tone, icon }: { label: string; value: string; sub?: string; tone?: "gold" | "primary"; icon?: string }) {
+  return (
+    <div className="relative overflow-hidden rounded-2xl border border-border bg-card p-5 shadow-sm">
+      <div className="absolute -right-6 -top-6 h-24 w-24 rounded-full opacity-10" style={{ backgroundColor: tone === "gold" ? "#c9a227" : "#3a2e22" }} />
+      <p className="text-xs uppercase tracking-widest text-muted-foreground">{label}</p>
+      <p className="mt-1 font-display text-3xl font-semibold text-primary">
+        {icon && <span className="mr-1 text-gold">{icon}</span>}
+        {value}
+      </p>
+      {sub && <p className="mt-1 text-xs text-muted-foreground">{sub}</p>}
+    </div>
+  );
+}
+
+function MiniKpi({ label, value, sub, warn }: { label: string; value: number; sub?: string; warn?: boolean }) {
+  return (
+    <div className={cn("rounded-xl border bg-card p-4 shadow-sm", warn ? "border-destructive/40" : "border-border")}>
+      <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p className={cn("mt-1 font-display text-2xl font-semibold", warn ? "text-destructive" : "text-primary")}>{value}</p>
+      {sub && <p className="text-[10px] text-muted-foreground">{sub}</p>}
     </div>
   );
 }
@@ -745,42 +942,63 @@ function CategoriesTab({ cats, reload }: { cats: any[]; reload: () => void }) {
 }
 
 function CouponsTab({ coupons, reload }: { coupons: any[]; reload: () => void }) {
-  const [form, setForm] = useState({ code: "", pct: "10", min: "499" });
+  const [form, setForm] = useState({ code: "", pct: "10", min: "499", expiresAt: "" });
   const H = { "Content-Type": "application/json" };
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
-    await j("/api/admin/coupons", { method: "POST", headers: H, body: JSON.stringify({ ...form, pct: Number(form.pct), min: Number(form.min) }) });
-    setForm({ code: "", pct: "10", min: "499" });
+    await j("/api/admin/coupons", {
+      method: "POST",
+      headers: H,
+      body: JSON.stringify({
+        ...form,
+        pct: Number(form.pct),
+        min: Number(form.min),
+        expiresAt: form.expiresAt ? new Date(form.expiresAt).toISOString() : undefined,
+      }),
+    });
+    setForm({ code: "", pct: "10", min: "499", expiresAt: "" });
     reload();
   };
   return (
     <div className="space-y-4">
-      <form onSubmit={create} className="flex flex-wrap gap-2">
+      <form onSubmit={create} className="flex flex-wrap items-end gap-2">
         <input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })} required placeholder="CODE" className="w-32 rounded-md border border-input bg-background px-3 py-2 text-sm uppercase" />
-        <input value={form.pct} onChange={(e) => setForm({ ...form, pct: e.target.value })} required type="number" min={1} max={90} placeholder="% off" className="w-24 rounded-md border border-input bg-background px-3 py-2 text-sm" />
-        <input value={form.min} onChange={(e) => setForm({ ...form, min: e.target.value })} required type="number" min={0} placeholder="Min ₹" className="w-28 rounded-md border border-input bg-background px-3 py-2 text-sm" />
+        <input value={form.pct} onChange={(e) => setForm({ ...form, pct: e.target.value })} required type="number" min={1} max={90} placeholder="% off" className="w-20 rounded-md border border-input bg-background px-3 py-2 text-sm" />
+        <input value={form.min} onChange={(e) => setForm({ ...form, min: e.target.value })} required type="number" min={0} placeholder="Min ₹" className="w-24 rounded-md border border-input bg-background px-3 py-2 text-sm" />
+        <label className="text-xs text-muted-foreground">
+          Expiry
+          <input type="datetime-local" value={form.expiresAt} onChange={(e) => setForm({ ...form, expiresAt: e.target.value })} className="mt-1 block w-44 rounded-md border border-input bg-background px-3 py-2 text-sm" />
+        </label>
         <button className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground">Add coupon</button>
       </form>
       <ul className="space-y-2">
-        {coupons.map((c) => (
-          <li key={c.code} className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card p-3 text-sm">
-            <b className="font-mono">{c.code}</b>
-            <span className="text-muted-foreground">{c.pct}% off above {inr(c.min)}</span>
-            <span className="flex-1" />
-            <button
-              onClick={async () => { await j("/api/admin/coupons", { method: "PUT", headers: H, body: JSON.stringify({ code: c.code, active: !c.active }) }); reload(); }}
-              className={cn("rounded-full px-3 py-1 text-xs font-medium", c.active ? "bg-primary/10 text-primary" : "bg-border text-muted-foreground")}
-            >
-              {c.active ? "Active" : "Disabled"}
-            </button>
-            <button
-              onClick={async () => { if (confirm(`Delete ${c.code}?`)) { await j(`/api/admin/coupons?code=${c.code}`, { method: "DELETE" }); reload(); } }}
-              className="text-xs text-destructive hover:underline"
-            >
-              Delete
-            </button>
-          </li>
-        ))}
+        {coupons.map((c) => {
+          const expired = c.expiresAt && new Date(c.expiresAt).getTime() < Date.now();
+          return (
+            <li key={c.code} className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card p-3 text-sm">
+              <b className="font-mono">{c.code}</b>
+              <span className="text-muted-foreground">{c.pct}% off above {inr(c.min)}</span>
+              {c.expiresAt && (
+                <span className={cn("rounded-full px-2.5 py-0.5 text-[11px] font-medium", expired ? "bg-destructive/10 text-destructive" : "bg-gold/15 text-cocoa")}>
+                  {expired ? "Expired" : `Expires ${new Date(c.expiresAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}`}
+                </span>
+              )}
+              <span className="flex-1" />
+              <button
+                onClick={async () => { await j("/api/admin/coupons", { method: "PUT", headers: H, body: JSON.stringify({ code: c.code, active: !c.active }) }); reload(); }}
+                className={cn("rounded-full px-3 py-1 text-xs font-medium", c.active ? "bg-primary/10 text-primary" : "bg-border text-muted-foreground")}
+              >
+                {c.active ? "Active" : "Disabled"}
+              </button>
+              <button
+                onClick={async () => { if (confirm(`Delete ${c.code}?`)) { await j(`/api/admin/coupons?code=${c.code}`, { method: "DELETE" }); reload(); } }}
+                className="text-xs text-destructive hover:underline"
+              >
+                Delete
+              </button>
+            </li>
+          );
+        })}
       </ul>
     </div>
   );
@@ -866,5 +1084,261 @@ function ReviewsTab({ reviews, reload }: { reviews: any[]; reload: () => void })
       ))}
       {reviews.length === 0 && <p className="py-10 text-center text-sm text-muted-foreground">No reviews.</p>}
     </ul>
+  );
+}
+function HampersTab({ hampers, reload }: { hampers: any[]; reload: () => void }) {
+  const [editor, setEditor] = useState<any | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [q, setQ] = useState("");
+
+  const list = hampers.filter((h) => !q || `${h.name} ${h.slug}`.toLowerCase().includes(q.toLowerCase()));
+
+  const blank = { slug: "", name: "", image: "/images/gift.jpg", description: "", highlights: [""], price: "", mrp: "", rating: "4.9", badge: "", inStock: true, items: [{ slug: "", name: "", qty: "1" }], metaTitle: "", metaDescription: "" };
+
+  const openNew = () => { setErr(null); setEditor({ isNew: true, slugTouched: false, form: { ...blank } }); };
+  const openEdit = (h: any) => {
+    setErr(null);
+    setEditor({ isNew: false, slugTouched: true, form: {
+      slug: h.slug, name: h.name, image: h.image, description: h.description,
+      highlights: h.highlights?.length ? [...h.highlights] : [""],
+      price: String(h.price), mrp: String(h.mrp), rating: String(h.rating ?? 4.9),
+      badge: h.badge ?? "", inStock: h.inStock !== false,
+      items: h.items?.length ? h.items.map((it: any) => ({ slug: it.slug, name: it.name, qty: String(it.qty) })) : [{ slug: "", name: "", qty: "1" }],
+      metaTitle: h.metaTitle ?? "", metaDescription: h.metaDescription ?? "",
+    }});
+  };
+
+  const set = (patch: Record<string, unknown>) => setEditor((e: any) => (e ? { ...e, form: { ...e.form, ...patch } } : e));
+  const setName = (name: string) => setEditor((e: any) => {
+    if (!e) return e;
+    const form = { ...e.form, name };
+    if (e.isNew && !e.slugTouched) form.slug = name.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+    return { ...e, form };
+  });
+
+  const save = async (ev: React.FormEvent) => {
+    ev.preventDefault();
+    if (!editor) return;
+    const f = editor.form;
+    const items = f.items.map((it: any) => ({ slug: it.slug.trim(), name: it.name.trim(), qty: Math.max(1, Number(it.qty) || 1) })).filter((it: any) => it.slug && it.name);
+    if (f.name.trim().length < 3) return setErr("Hamper name must be at least 3 characters.");
+    if (!f.slug.trim()) return setErr("Slug is required.");
+    if (f.description.trim().length < 10) return setErr("Description must be at least 10 characters.");
+    if (!f.price || !f.mrp) return setErr("Price and MRP are required.");
+    if (Number(f.mrp) < Number(f.price)) return setErr("MRP must be >= price.");
+    if (items.length === 0) return setErr("Add at least one item to the hamper.");
+    setBusy(true); setErr(null);
+    try {
+      await j("/api/admin/hampers", { method: editor.isNew ? "POST" : "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slug: f.slug.trim(), name: f.name.trim(), image: f.image.trim() || "/images/gift.jpg", description: f.description.trim(),
+          highlights: f.highlights.map((h: string) => h.trim()).filter(Boolean), price: Number(f.price), mrp: Number(f.mrp),
+          rating: Number(f.rating) || 4.9, badge: f.badge || undefined, inStock: f.inStock, items,
+          metaTitle: f.metaTitle.trim(), metaDescription: f.metaDescription.trim() }) });
+      setEditor(null); reload();
+    } catch (e) { setErr(e instanceof Error ? e.message : "Couldn't save hamper."); }
+    finally { setBusy(false); }
+  };
+
+  const toggleStock = async (h: any) => { await j("/api/admin/hampers", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...h, inStock: !h.inStock }) }); reload(); };
+  const remove = async (slug: string) => { if (!confirm(`Delete hamper ${slug}?`)) return; await j(`/api/admin/hampers?slug=${slug}`, { method: "DELETE" }); reload(); };
+
+  const F = "w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-gold";
+  const L = "block text-xs font-semibold uppercase tracking-wider text-muted-foreground";
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-2">
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search hampers…" className="min-w-0 flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm" />
+        <button onClick={openNew} className="rounded-md bg-primary px-5 py-2 text-sm font-medium text-primary-foreground hover:bg-cocoa">+ Add hamper</button>
+      </div>
+
+      {editor && (
+        <form onSubmit={save} className="space-y-5 rounded-xl border border-gold/40 bg-card p-5 shadow-sm">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-semibold">{editor.isNew ? "New gift hamper" : `Edit — ${editor.form.name}`}</h3>
+            <button type="button" onClick={() => setEditor(null)} className="text-sm text-muted-foreground hover:text-foreground">Close ✕</button>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="text-sm font-medium"><span className={L}>Hamper name *</span><input value={editor.form.name} onChange={(e) => setName(e.target.value)} required placeholder="e.g. Festive Gold Hamper" className={`${F} mt-1.5`} /></label>
+            <label className="text-sm font-medium"><span className={L}>Slug (URL) *</span><input value={editor.form.slug} onChange={(e) => setEditor((ed: any) => (ed ? { ...ed, slugTouched: true, form: { ...ed.form, slug: e.target.value } } : ed))} required placeholder="festive-gold-hamper" className={`${F} mt-1.5 font-mono`} /></label>
+            <label className="text-sm font-medium sm:col-span-2"><span className={L}>Image URL</span><span className="mt-1.5 flex items-center gap-3"><img src={editor.form.image || "/images/gift.jpg"} alt="" onError={(e) => ((e.target as HTMLImageElement).src = "/images/gift.jpg")} className="h-14 w-14 shrink-0 rounded-md border border-border object-cover" /><input value={editor.form.image} onChange={(e) => set({ image: e.target.value })} placeholder="/images/gift.jpg" className={`${F} font-mono`} /></span></label>
+            <label className="text-sm font-medium"><span className={L}>Price (₹) *</span><input value={editor.form.price} onChange={(e) => set({ price: e.target.value })} inputMode="numeric" required placeholder="1499" className={`${F} mt-1.5`} /></label>
+            <label className="text-sm font-medium"><span className={L}>MRP (₹) *</span><input value={editor.form.mrp} onChange={(e) => set({ mrp: e.target.value })} inputMode="numeric" required placeholder="1799" className={`${F} mt-1.5`} /></label>
+            <label className="text-sm font-medium"><span className={L}>Rating (0–5)</span><input value={editor.form.rating} onChange={(e) => set({ rating: e.target.value })} type="number" min={0} max={5} step={0.1} className={`${F} mt-1.5`} /></label>
+            <label className="text-sm font-medium"><span className={L}>Badge</span><select value={editor.form.badge} onChange={(e) => set({ badge: e.target.value })} className={`${F} mt-1.5`}><option value="">None</option><option value="Best Seller">Best Seller</option><option value="New Arrival">New Arrival</option></select></label>
+            <label className="flex items-center gap-2 text-sm font-medium sm:col-span-2"><input type="checkbox" checked={editor.form.inStock} onChange={(e) => set({ inStock: e.target.checked })} className="h-4 w-4 accent-[var(--primary)]" />In stock (uncheck = Sold out)</label>
+            <label className="text-sm font-medium sm:col-span-2"><span className={L}>Description *</span><textarea value={editor.form.description} onChange={(e) => set({ description: e.target.value })} required rows={3} placeholder="What's inside, who it's for…" className={`${F} mt-1.5 resize-y`} /></label>
+          </div>
+
+          <div>
+            <p className={L}>Highlights</p>
+            <div className="mt-1.5 space-y-2">
+              {editor.form.highlights.map((h: string, i: number) => (
+                <span key={i} className="flex gap-2">
+                  <input value={h} onChange={(e) => set({ highlights: editor.form.highlights.map((x: string, j: number) => (j === i ? e.target.value : x)) })} placeholder={`Highlight ${i + 1}`} className={F} />
+                  <button type="button" onClick={() => set({ highlights: editor.form.highlights.filter((_: string, j: number) => j !== i) })} aria-label="Remove highlight" className="shrink-0 rounded-md border border-input px-3 text-destructive hover:border-destructive">−</button>
+                </span>
+              ))}
+              <button type="button" onClick={() => set({ highlights: [...editor.form.highlights, ""] })} className="text-sm font-medium text-primary hover:underline">+ Add highlight</button>
+            </div>
+          </div>
+
+          <div>
+            <p className={L}>Items inside the hamper *</p>
+            <div className="mt-1.5 space-y-2">
+              {editor.form.items.map((it: any, i: number) => (
+                <div key={i} className="grid grid-cols-[1fr_1fr_70px_auto] items-center gap-2">
+                  <input value={it.slug} onChange={(e) => set({ items: editor.form.items.map((x: any, j: number) => (j === i ? { ...x, slug: e.target.value } : x)) })} placeholder="product slug" aria-label="Item slug" className={`${F} font-mono`} />
+                  <input value={it.name} onChange={(e) => set({ items: editor.form.items.map((x: any, j: number) => (j === i ? { ...x, name: e.target.value } : x)) })} placeholder="Display name" aria-label="Item name" className={F} />
+                  <input value={it.qty} onChange={(e) => set({ items: editor.form.items.map((x: any, j: number) => (j === i ? { ...x, qty: e.target.value } : x)) })} inputMode="numeric" placeholder="Qty" aria-label="Qty" className={F} />
+                  <button type="button" onClick={() => set({ items: editor.form.items.filter((_: any, j: number) => j !== i) })} disabled={editor.form.items.length <= 1} aria-label="Remove item" className="rounded-md border border-input px-2.5 py-2 text-destructive hover:border-destructive disabled:opacity-30">−</button>
+                </div>
+              ))}
+              <button type="button" onClick={() => set({ items: [...editor.form.items, { slug: "", name: "", qty: "1" }] })} className="text-sm font-medium text-primary hover:underline">+ Add item</button>
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-border bg-secondary/50 p-4">
+            <p className={L}>SEO — Google me kaise dikhega</p>
+            <div className="mt-3 grid gap-4 sm:grid-cols-2">
+              <label className="text-sm font-medium"><span className="flex items-center justify-between text-xs text-muted-foreground">Meta title<span className={cn(editor.form.metaTitle.trim().length > 60 && "font-semibold text-destructive")}>{editor.form.metaTitle.trim().length}/60</span></span><input value={editor.form.metaTitle} onChange={(e) => set({ metaTitle: e.target.value })} maxLength={120} placeholder="Khali = auto" className={`${F} mt-1.5`} /></label>
+              <label className="text-sm font-medium"><span className="flex items-center justify-between text-xs text-muted-foreground">Meta description<span className={cn(editor.form.metaDescription.trim().length > 160 && "font-semibold text-destructive")}>{editor.form.metaDescription.trim().length}/160</span></span><textarea value={editor.form.metaDescription} onChange={(e) => set({ metaDescription: e.target.value })} maxLength={320} rows={3} placeholder="Khali = auto" className={`${F} mt-1.5 resize-y`} /></label>
+            </div>
+          </div>
+
+          {err && <p role="alert" className="rounded-md border border-destructive/25 bg-destructive/[0.06] px-4 py-2.5 text-sm text-destructive">{err}</p>}
+          <div className="flex flex-wrap gap-2">
+            <button disabled={busy} className="rounded-md bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground hover:bg-cocoa disabled:opacity-60">{busy ? "Saving…" : editor.isNew ? "Create hamper" : "Save changes"}</button>
+            <button type="button" onClick={() => setEditor(null)} className="rounded-md border border-input px-5 py-2.5 text-sm">Cancel</button>
+          </div>
+        </form>
+      )}
+
+      <ul className="space-y-2">
+        {list.map((h) => (
+          <li key={h.slug} className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card p-3 text-sm">
+            <img src={h.image} alt="" loading="lazy" onError={(e) => ((e.target as HTMLImageElement).src = "/images/gift.jpg")} className="h-10 w-10 rounded-md border border-border object-cover" />
+            <span className="min-w-0 flex-1"><b>{h.name}</b><span className="block truncate text-xs text-muted-foreground">{h.slug} · ₹{h.price} (MRP ₹{h.mrp}) · {h.items?.length ?? 0} items</span></span>
+            <button onClick={() => toggleStock(h)} className={cn("rounded-full px-3 py-1 text-xs font-medium", h.inStock ? "bg-primary/10 text-primary" : "bg-destructive/10 text-destructive")}>{h.inStock ? "In stock" : "Out of stock"}</button>
+            <button onClick={() => openEdit(h)} className="rounded-md border border-input px-3 py-1 text-xs hover:border-gold">Edit</button>
+            <button onClick={() => remove(h.slug)} className="text-xs text-destructive hover:underline">Delete</button>
+          </li>
+        ))}
+        {list.length === 0 && <p className="py-10 text-center text-sm text-muted-foreground">No hampers found.</p>}
+      </ul>
+    </div>
+  );
+}
+
+function PromoTab({ promo, reload }: { promo: any; reload: () => void }) {
+  const [form, setForm] = useState<any>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (promo && !form) {
+      setForm({
+        enabled: promo.enabled ?? true,
+        title: promo.title ?? "",
+        subtitle: promo.subtitle ?? "",
+        couponCode: promo.couponCode ?? "",
+        expiresAt: promo.expiresAt ? promo.expiresAt.slice(0, 16) : "",
+        ctaLabel: promo.ctaLabel ?? "Shop Now",
+        ctaHref: promo.ctaHref ?? "/shop",
+        bgColor: promo.bgColor ?? "#3a2e22",
+      });
+    }
+  }, [promo, form]);
+
+  if (!form) return <p className="py-8 text-center text-sm text-muted-foreground">Loading…</p>;
+
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setErr(null);
+    try {
+      await j("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          promo: {
+            enabled: form.enabled,
+            title: form.title,
+            subtitle: form.subtitle,
+            couponCode: form.couponCode,
+            expiresAt: form.expiresAt ? new Date(form.expiresAt).toISOString() : promo.expiresAt,
+            ctaLabel: form.ctaLabel,
+            ctaHref: form.ctaHref,
+            bgColor: form.bgColor,
+          },
+        }),
+      });
+      reload();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Couldn't save.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const F = "w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-gold";
+
+  return (
+    <form onSubmit={save} className="space-y-5 rounded-xl border border-gold/40 bg-card p-5 shadow-sm">
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold">Promo Banner (Home page)</h3>
+        <label className="flex items-center gap-2 text-sm font-medium">
+          <input type="checkbox" checked={form.enabled} onChange={(e) => setForm({ ...form, enabled: e.target.checked })} className="h-4 w-4 accent-[var(--primary)]" />
+          Enabled
+        </label>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <label className="text-sm font-medium sm:col-span-2">
+          <span className="text-xs uppercase tracking-wider text-muted-foreground">Title</span>
+          <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Special Offers on Premium Gift Boxes" className={`${F} mt-1.5`} />
+        </label>
+        <label className="text-sm font-medium sm:col-span-2">
+          <span className="text-xs uppercase tracking-wider text-muted-foreground">Subtitle</span>
+          <input value={form.subtitle} onChange={(e) => setForm({ ...form, subtitle: e.target.value })} placeholder="Free Shipping on Orders Above ₹999" className={`${F} mt-1.5`} />
+        </label>
+        <label className="text-sm font-medium">
+          <span className="text-xs uppercase tracking-wider text-muted-foreground">Coupon code</span>
+          <input value={form.couponCode} onChange={(e) => setForm({ ...form, couponCode: e.target.value.toUpperCase() })} placeholder="WELCOME10" className={`${F} mt-1.5 font-mono uppercase`} />
+        </label>
+        <label className="text-sm font-medium">
+          <span className="text-xs uppercase tracking-wider text-muted-foreground">Expiry (live countdown)</span>
+          <input type="datetime-local" value={form.expiresAt} onChange={(e) => setForm({ ...form, expiresAt: e.target.value })} className={`${F} mt-1.5`} />
+        </label>
+        <label className="text-sm font-medium">
+          <span className="text-xs uppercase tracking-wider text-muted-foreground">CTA label</span>
+          <input value={form.ctaLabel} onChange={(e) => setForm({ ...form, ctaLabel: e.target.value })} placeholder="Shop Gift Hampers" className={`${F} mt-1.5`} />
+        </label>
+        <label className="text-sm font-medium">
+          <span className="text-xs uppercase tracking-wider text-muted-foreground">CTA link</span>
+          <input value={form.ctaHref} onChange={(e) => setForm({ ...form, ctaHref: e.target.value })} placeholder="/shop?group=gift-hampers" className={`${F} mt-1.5 font-mono`} />
+        </label>
+        <label className="text-sm font-medium">
+          <span className="text-xs uppercase tracking-wider text-muted-foreground">Background color</span>
+          <span className="mt-1.5 flex items-center gap-2">
+            <input type="color" value={form.bgColor} onChange={(e) => setForm({ ...form, bgColor: e.target.value })} className="h-10 w-12 cursor-pointer rounded-md border border-input bg-background" />
+            <input value={form.bgColor} onChange={(e) => setForm({ ...form, bgColor: e.target.value })} className={`${F} font-mono`} />
+          </span>
+        </label>
+      </div>
+
+      {err && <p role="alert" className="rounded-md border border-destructive/25 bg-destructive/[0.06] px-4 py-2.5 text-sm text-destructive">{err}</p>}
+
+      <div className="flex flex-wrap gap-2">
+        <button disabled={busy} className="rounded-md bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground hover:bg-cocoa disabled:opacity-60">
+          {busy ? "Saving…" : "Save banner"}
+        </button>
+      </div>
+
+      <p className="text-xs text-muted-foreground">
+        Banner home page par hero ke baad dikhega, expiry tak live countdown chalega. Disable karne par gayab ho jayega.
+      </p>
+    </form>
   );
 }

@@ -6,13 +6,17 @@ import { ArrowRight, Eye, EyeOff, Lock, Mail } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { AuthLayout, authInput } from "@/components/site/AuthLayout";
 
+const DEV = process.env.NODE_ENV !== "production";
+const DEV_EMAIL = "admin@dryfruitadda.in";
+const DEV_PASS = "DFA-KB4aht9Z1Hwq5YJU-2026";
+
 export default function LoginForm() {
   const { user, login } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirect = searchParams.get("redirect") ?? undefined;
-  const [email, setEmail] = useState("");
-  const [pass, setPass] = useState("");
+  const [email, setEmail] = useState(DEV ? DEV_EMAIL : "");
+  const [pass, setPass] = useState(DEV ? DEV_PASS : "");
   const [show, setShow] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -64,6 +68,9 @@ export default function LoginForm() {
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@example.com"
               autoComplete="email"
+              required
+              minLength={5}
+              maxLength={254}
               className={authInput}
             />
           </span>
@@ -81,6 +88,9 @@ export default function LoginForm() {
               onChange={(e) => setPass(e.target.value)}
               placeholder="••••••••"
               autoComplete="current-password"
+              required
+              minLength={6}
+              maxLength={128}
               className={authInput}
             />
             <button
@@ -99,6 +109,11 @@ export default function LoginForm() {
             className="rounded-xl border border-destructive/25 bg-destructive/[0.06] px-4 py-2.5 text-sm text-destructive"
           >
             {err}
+          </p>
+        )}
+        {DEV && (
+          <p className="rounded-xl border border-gold/30 bg-gold/10 px-4 py-2.5 text-xs text-muted-foreground">
+            Dev mode: credentials pre-filled (admin@dryfruitadda.in). Remove before production.
           </p>
         )}
         <button disabled={busy} className="group flex w-full items-center justify-center gap-2 rounded-full bg-primary py-3.5 font-medium text-primary-foreground transition hover:bg-cocoa active:scale-[0.99] disabled:opacity-60">

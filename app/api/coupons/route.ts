@@ -1,17 +1,18 @@
 import { NextResponse } from "next/server";
 import { readDb } from "@/lib/server/db";
+import { couponStatus } from "@/lib/server/db";
 import {
   cleanText,
   readJsonSafe,
   sameOrigin,
 } from "@/lib/server/security";
 
-// GET /api/coupons — active coupon list
+// GET /api/coupons — active coupon list (expired bhi dikhe, status ke saath)
 // POST /api/coupons { code, subtotal } — validate & compute discount
 export async function GET() {
   const db = await readDb();
   return NextResponse.json({
-    coupons: db.coupons.filter((c) => c.active),
+    coupons: db.coupons.map((c) => ({ ...c, status: couponStatus(c) })),
   });
 }
 
@@ -27,9 +28,19 @@ export async function POST(req: Request) {
   const subtotal = Math.max(0, Math.floor(Number(body.subtotal ?? 0)));
 
   const db = await readDb();
-  const coupon = db.coupons.find((c) => c.code === code && c.active);
+  const coupon = db.coupons.find((c) => c.code === code);
   if (!coupon) {
     return NextResponse.json({ valid: false, error: "This discount code isn't valid." }, { status: 400 });
+  }
+  const status = couponStatus(coupon);
+  if (status === "expired") {
+    return NextResponse.json({ valid: false, error: "This coupon has expired.", expired: true }, { status: 400 });
+  }
+  if (status === "disabled") {
+    return NextResponse.json({ valid: false, error: "This coupon is disabled." }, { status: 400 });
+  }
+  if (status === "limit-reached") {
+    return NextResponse.json({ valid: false, error: "This coupon has reached its usage limit." }, { status: 400 });
   }
   if (subtotal < coupon.min) {
     return NextResponse.json(
@@ -41,5 +52,5 @@ export async function POST(req: Request) {
     );
   }
   const discount = Math.round((subtotal * coupon.pct) / 100);
-  return NextResponse.json({ valid: true, coupon, discount });
+  return NextResponse.json({ valid: true, coupon: { ...coupon, status }, discount });
 }

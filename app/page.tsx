@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Award, Headphones, Leaf, Package, ShieldCheck, Truck } from "lucide-react";
 import { NewsletterForm } from "@/components/site/Newsletter";
 import { BestSellers, CategoriesGrid, HomeTestimonials } from "@/components/site/HomeSections";
+import { PromoBanner } from "@/components/site/PromoBanner";
 import { DEFAULT_OG_IMAGE, SITE_DESCRIPTION, SITE_NAME, SITE_TAGLINE } from "@/lib/seo";
 
 export const metadata: Metadata = {
@@ -58,6 +59,9 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      {/* Promo banner (admin manageable) */}
+      <PromoBanner />
 
       {/* Categories */}
       <section className="mx-auto max-w-7xl px-4 py-20">

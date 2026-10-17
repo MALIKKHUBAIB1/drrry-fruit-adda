@@ -69,6 +69,9 @@ export default function RegisterForm() {
               onChange={(e) => setName(e.target.value)}
               placeholder="Aarav Sharma"
               autoComplete="name"
+              required
+              minLength={3}
+              maxLength={80}
               className={authInput}
             />
           </span>
@@ -83,6 +86,9 @@ export default function RegisterForm() {
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@example.com"
               autoComplete="email"
+              required
+              minLength={5}
+              maxLength={254}
               className={authInput}
             />
           </span>
@@ -97,6 +103,9 @@ export default function RegisterForm() {
               onChange={(e) => setPass(e.target.value)}
               placeholder="Min 6 characters"
               autoComplete="new-password"
+              required
+              minLength={6}
+              maxLength={128}
               className={authInput}
             />
             <button

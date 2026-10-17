@@ -4,10 +4,12 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import {
+  Gift,
   LayoutDashboard,
   LayoutGrid,
   LogOut,
   Mail,
+  Megaphone,
   Menu,
   Package,
   ShoppingBag,
@@ -25,6 +27,8 @@ const NAV = [
   { tab: "Orders", Icon: ShoppingBag },
   { tab: "Products", Icon: Package },
   { tab: "Categories", Icon: LayoutGrid },
+  { tab: "Gift Hampers", Icon: Gift },
+  { tab: "Promo Banner", Icon: Megaphone },
   { tab: "Coupons", Icon: Ticket },
   { tab: "Users", Icon: Users },
   { tab: "Messages", Icon: Mail },

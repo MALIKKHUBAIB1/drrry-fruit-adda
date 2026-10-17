@@ -6,12 +6,30 @@ import { getProduct } from "./products";
 
 export type CartItem = { slug: string; variant: string; qty: number };
 
-export type Coupon = { code: string; pct: number; min: number; label: string };
+import { api } from "./api";
+
+export type Coupon = { code: string; pct: number; min: number; label: string; expiresAt?: string; status?: string };
 
 export const COUPONS: Record<string, Coupon> = {
   WELCOME10: { code: "WELCOME10", pct: 10, min: 499, label: "10% off on orders above ₹499" },
   DRYFRUIT20: { code: "DRYFRUIT20", pct: 20, min: 1499, label: "20% off on orders above ₹1,499" },
 };
+
+// Coupons backend se load hote hain (expiry/status ke saath)
+let _couponsLoaded = false;
+export async function loadCoupons(): Promise<void> {
+  if (_couponsLoaded) return;
+  try {
+    const d = await api<{ coupons: Coupon[] }>("/api/coupons");
+    if (d.coupons?.length) {
+      Object.keys(COUPONS).forEach((k) => delete COUPONS[k]);
+      d.coupons.forEach((c) => { COUPONS[c.code] = c; });
+    }
+    _couponsLoaded = true;
+  } catch {
+    // fallback static rehne do
+  }
+}
 
 type Store = {
   cart: CartItem[];
@@ -58,6 +76,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [loggedIn, setLoggedIn] = useState(false);
   const [synced, setSynced] = useState(false);
   const syncTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Coupons backend se load (expiry/status)
+  useEffect(() => {
+    loadCoupons();
+  }, []);
 
   // 1) Guest data localStorage se load
   useEffect(() => {

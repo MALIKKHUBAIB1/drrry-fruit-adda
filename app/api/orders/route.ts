@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { readDb, shippingFor, updateDb, type DbOrder } from "@/lib/server/db";
 import { getSessionUser, newId } from "@/lib/server/auth";
+import { couponStatus } from "@/lib/server/db";
 import {
   cleanText,
   isValidEmail,
@@ -93,11 +94,14 @@ export async function POST(req: NextRequest) {
     let coupon: string | null = null;
     const code = cleanText(body.coupon, 30).toUpperCase();
     if (code) {
-      const c = db.coupons.find((x) => x.code === code && x.active);
+      const c = db.coupons.find((x) => x.code === code);
       if (!c) throw new Error("This discount code isn't valid.");
+      const st = couponStatus(c);
+      if (st !== "active") throw new Error(st === "expired" ? "This coupon has expired." : "This coupon is no longer valid.");
       if (subtotal < c.min) throw new Error(`Add items worth ₹${c.min.toLocaleString("en-IN")} to use ${c.code}.`);
       discount = Math.round((subtotal * c.pct) / 100);
       coupon = c.code;
+      c.usedCount = (c.usedCount ?? 0) + 1;
     }
     const shipping = shippingFor(subtotal - discount);
     const total = subtotal - discount + shipping;
