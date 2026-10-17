@@ -123,14 +123,16 @@ export async function PUT(req: NextRequest) {
   const slug = cleanText(body.slug, 80);
   if (!slug) return NextResponse.json({ error: "slug required." }, { status: 400 });
 
-  const v = validateProduct({ ...body, slug }, false);
-  if ("error" in v) return NextResponse.json({ error: v.error }, { status: 400 });
-
   const product = await updateDb((db) => {
     const i = db.products.findIndex((p) => p.slug === slug);
     if (i < 0) return null;
-    if (!db.categories.some((c) => c.slug === v.data.category)) throw new Error("Selected category does not exist.");
-    const updated: ProductType = { ...v.data, slug, added: db.products[i].added } as ProductType;
+    // Body ke saath merge karo taaki partial update (e.g. sirf status toggle)
+    // baaki fields — jaise badge — wipe na kar de.
+    const merged = { ...db.products[i], ...body, slug };
+    const v2 = validateProduct(merged, false);
+    if ("error" in v2) throw new Error(v2.error);
+    if (!db.categories.some((c) => c.slug === v2.data.category)) throw new Error("Selected category does not exist.");
+    const updated: ProductType = { ...v2.data, slug, added: db.products[i].added } as ProductType;
     db.products[i] = updated;
     return updated;
   }).catch((e: Error) => ({ __error: e.message }) as unknown as null);

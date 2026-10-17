@@ -40,7 +40,7 @@ export function BestSellers() {
       .slice(0, 8),
   );
   useEffect(() => {
-    fetch("/api/products?badge=Best+Seller&limit=8")
+    fetch("/api/products?badge=Best+Seller&limit=8&fill=1")
       .then((r) => r.json())
       .then((d) => {
         if (d.products?.length) setBest(d.products);

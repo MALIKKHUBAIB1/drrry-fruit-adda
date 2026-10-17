@@ -16,6 +16,9 @@ export async function GET(req: Request) {
   const sort = cleanText(searchParams.get("sort") ?? "featured", 20);
   const inStock = searchParams.get("inStock");
   const limit = Math.max(0, Math.min(100, toInt(searchParams.get("limit"), 0, 100)));
+  // fill=1: agar filter se kam products mile to baaki catalogue se top-up karo
+  // (e.g. homepage "Best Sellers" — best sellers kam ho to baaki dikhao)
+  const fill = searchParams.get("fill") === "1";
 
   let list = await getProducts();
 
@@ -48,6 +51,12 @@ export async function GET(req: Request) {
       break;
     default:
       break;
+  }
+
+  if (fill && limit > 0 && list.length < limit) {
+    const slugs = new Set(list.map((p) => p.slug));
+    const rest = (await getProducts()).filter((p) => !slugs.has(p.slug));
+    list = [...list, ...rest].slice(0, limit);
   }
 
   if (limit > 0) list = list.slice(0, limit);
