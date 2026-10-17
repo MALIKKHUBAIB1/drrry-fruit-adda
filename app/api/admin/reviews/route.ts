@@ -1,12 +1,13 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { readDb, updateDb } from "@/lib/server/db";
 import { ADMIN_DENIED, requireAdmin } from "@/lib/server/admin";
+import { cleanText, readJsonSafe, sameOrigin } from "@/lib/server/security";
 
-// GET /api/admin/reviews?slug= — saare reviews moderate karne ke liye
+// GET /api/admin/reviews?slug=
 export async function GET(req: NextRequest) {
   const { status } = await requireAdmin(req);
   if (status !== 200) return NextResponse.json({ error: ADMIN_DENIED(status) }, { status });
-  const slug = new URL(req.url).searchParams.get("slug")?.trim();
+  const slug = cleanText(new URL(req.url).searchParams.get("slug") ?? "", 80);
   const db = await readDb();
   const reviews = db.reviews
     .filter((r) => !slug || r.productSlug === slug)
@@ -14,11 +15,14 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ reviews, count: reviews.length });
 }
 
-// DELETE /api/admin/reviews?id= — koi bhi review hatao
+// DELETE /api/admin/reviews?id=
 export async function DELETE(req: NextRequest) {
   const { status } = await requireAdmin(req);
   if (status !== 200) return NextResponse.json({ error: ADMIN_DENIED(status) }, { status });
-  const id = new URL(req.url).searchParams.get("id")?.trim();
+  if (!sameOrigin(req)) {
+    return NextResponse.json({ error: "Cross-origin request blocked." }, { status: 403 });
+  }
+  const id = cleanText(new URL(req.url).searchParams.get("id") ?? "", 40);
   if (!id) return NextResponse.json({ error: "id required." }, { status: 400 });
   const removed = await updateDb((db) => {
     const i = db.reviews.findIndex((r) => r.id === id);

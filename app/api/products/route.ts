@@ -1,16 +1,21 @@
 import { NextResponse } from "next/server";
 import { getCategories, getProducts } from "@/lib/server/db";
+import {
+  cleanText,
+  toFloat,
+  toInt,
+} from "@/lib/server/security";
 
 // GET /api/products?q=&category=&group=&sort=&badge=&inStock=&limit=
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
-  const q = (searchParams.get("q") ?? "").trim().toLowerCase();
-  const category = searchParams.get("category") ?? "";
-  const group = searchParams.get("group") ?? "";
-  const badge = searchParams.get("badge") ?? "";
-  const sort = searchParams.get("sort") ?? "featured";
+  const q = cleanText(searchParams.get("q") ?? "", 80).toLowerCase();
+  const category = cleanText(searchParams.get("category") ?? "", 40);
+  const group = cleanText(searchParams.get("group") ?? "", 40);
+  const badge = cleanText(searchParams.get("badge") ?? "", 30);
+  const sort = cleanText(searchParams.get("sort") ?? "featured", 20);
   const inStock = searchParams.get("inStock");
-  const limit = Math.max(0, Number(searchParams.get("limit") ?? 0));
+  const limit = Math.max(0, Math.min(100, toInt(searchParams.get("limit"), 0, 100)));
 
   let list = await getProducts();
 

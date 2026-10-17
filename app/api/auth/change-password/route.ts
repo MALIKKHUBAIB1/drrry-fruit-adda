@@ -1,16 +1,25 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { updateDb } from "@/lib/server/db";
 import { getSessionUser, hashPassword, verifyPassword } from "@/lib/server/auth";
+import { readJsonSafe, sameOrigin } from "@/lib/server/security";
 
 // POST /api/auth/change-password { current, password }
 export async function POST(req: NextRequest) {
+  if (!sameOrigin(req)) {
+    return NextResponse.json({ error: "Cross-origin request blocked." }, { status: 403 });
+  }
   const user = await getSessionUser(req);
   if (!user) return NextResponse.json({ error: "Login required." }, { status: 401 });
-  const body = await req.json().catch(() => ({}));
+
+  const parsed = await readJsonSafe(req, 10_000);
+  if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
+  const body = (parsed.data ?? {}) as Record<string, unknown>;
+
   const current = String(body.current ?? "");
   const password = String(body.password ?? "");
-  if (password.length < 6)
-    return NextResponse.json({ error: "New password must be at least 6 characters." }, { status: 400 });
+  if (password.length < 6 || password.length > 128) {
+    return NextResponse.json({ error: "New password must be 6–128 characters." }, { status: 400 });
+  }
 
   const ok = await updateDb((db) => {
     const u = db.users.find((x) => x.id === user.id);
@@ -19,7 +28,6 @@ export async function POST(req: NextRequest) {
     const { salt, hash } = hashPassword(password);
     u.salt = salt;
     u.passHash = hash;
-    // Saare sessions expire kar do (dobara login karna padega)
     db.sessions = db.sessions.filter((s) => s.userId !== user.id);
     return true;
   });

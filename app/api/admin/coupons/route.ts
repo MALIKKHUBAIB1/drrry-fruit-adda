@@ -1,11 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { readDb, updateDb } from "@/lib/server/db";
 import { ADMIN_DENIED, requireAdmin } from "@/lib/server/admin";
+import { cleanText, readJsonSafe, sameOrigin, toInt } from "@/lib/server/security";
 
-// GET /api/admin/coupons — saare coupons (inactive samet)
-// POST /api/admin/coupons { code, pct, min, label, active }
-// PUT /api/admin/coupons { code, pct?, min?, label?, active? }
-// DELETE /api/admin/coupons?code=
+// GET /api/admin/coupons
 export async function GET(req: NextRequest) {
   const { status } = await requireAdmin(req);
   if (status !== 200) return NextResponse.json({ error: ADMIN_DENIED(status) }, { status });
@@ -14,21 +12,30 @@ export async function GET(req: NextRequest) {
 }
 
 function parse(body: Record<string, unknown>) {
-  const code = String(body.code ?? "").trim().toUpperCase();
-  const pct = Math.floor(Number(body.pct ?? NaN));
-  const min = Math.floor(Number(body.min ?? NaN));
-  const label = String(body.label ?? "").trim();
+  const code = cleanText(body.code, 20).toUpperCase();
+  const pct = toInt(body.pct, 1, 90);
+  const min = toInt(body.min, 0, 1000000);
+  const label = cleanText(body.label, 120);
   if (!code) return { error: "code required." };
-  if (!Number.isFinite(pct) || pct < 1 || pct > 90) return { error: "pct must be 1–90." };
-  if (!Number.isFinite(min) || min < 0) return { error: "min must be 0 or more." };
+  if (pct < 1) return { error: "pct must be 1–90." };
   return { data: { code, pct, min, label: label || `${pct}% off above ₹${min}`, active: body.active !== false } };
 }
 
+// POST /api/admin/coupons
 export async function POST(req: NextRequest) {
   const { status } = await requireAdmin(req);
   if (status !== 200) return NextResponse.json({ error: ADMIN_DENIED(status) }, { status });
-  const v = parse(await req.json().catch(() => ({})));
+  if (!sameOrigin(req)) {
+    return NextResponse.json({ error: "Cross-origin request blocked." }, { status: 403 });
+  }
+
+  const parsed = await readJsonSafe(req, 10_000);
+  if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
+  const body = (parsed.data ?? {}) as Record<string, unknown>;
+
+  const v = parse(body);
   if ("error" in v) return NextResponse.json({ error: v.error }, { status: 400 });
+
   const coupon = await updateDb((db) => {
     if (db.coupons.some((c) => c.code === v.data.code)) throw new Error("Coupon already exists.");
     db.coupons.push(v.data);
@@ -38,26 +45,34 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ coupon }, { status: 201 });
 }
 
+// PUT /api/admin/coupons { code, pct?, min?, label?, active? }
 export async function PUT(req: NextRequest) {
   const { status } = await requireAdmin(req);
   if (status !== 200) return NextResponse.json({ error: ADMIN_DENIED(status) }, { status });
-  const body = await req.json().catch(() => ({}));
-  const code = String(body.code ?? "").trim().toUpperCase();
+  if (!sameOrigin(req)) {
+    return NextResponse.json({ error: "Cross-origin request blocked." }, { status: 403 });
+  }
+
+  const parsed = await readJsonSafe(req, 10_000);
+  if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
+  const body = (parsed.data ?? {}) as Record<string, unknown>;
+
+  const code = cleanText(body.code, 20).toUpperCase();
   if (!code) return NextResponse.json({ error: "code required." }, { status: 400 });
+
   const updated = await updateDb((db) => {
     const c = db.coupons.find((x) => x.code === code);
     if (!c) return null;
     if (body.pct !== undefined) {
-      const pct = Math.floor(Number(body.pct));
-      if (!Number.isFinite(pct) || pct < 1 || pct > 90) throw new Error("pct must be 1–90.");
+      const pct = toInt(body.pct, 1, 90);
+      if (pct < 1) throw new Error("pct must be 1–90.");
       c.pct = pct;
     }
     if (body.min !== undefined) {
-      const min = Math.floor(Number(body.min));
-      if (!Number.isFinite(min) || min < 0) throw new Error("min must be 0 or more.");
+      const min = toInt(body.min, 0, 1000000);
       c.min = min;
     }
-    if (typeof body.label === "string" && body.label.trim()) c.label = body.label.trim();
+    if (typeof body.label === "string" && body.label.trim()) c.label = cleanText(body.label, 120);
     if (body.active !== undefined) c.active = body.active === true;
     return c;
   }).catch((e: Error) => ({ __error: e.message }) as unknown as null);
@@ -66,10 +81,14 @@ export async function PUT(req: NextRequest) {
   return NextResponse.json({ coupon: updated });
 }
 
+// DELETE /api/admin/coupons?code=
 export async function DELETE(req: NextRequest) {
   const { status } = await requireAdmin(req);
   if (status !== 200) return NextResponse.json({ error: ADMIN_DENIED(status) }, { status });
-  const code = new URL(req.url).searchParams.get("code")?.trim().toUpperCase();
+  if (!sameOrigin(req)) {
+    return NextResponse.json({ error: "Cross-origin request blocked." }, { status: 403 });
+  }
+  const code = cleanText(new URL(req.url).searchParams.get("code") ?? "", 20).toUpperCase();
   if (!code) return NextResponse.json({ error: "code required." }, { status: 400 });
   const removed = await updateDb((db) => {
     const i = db.coupons.findIndex((c) => c.code === code);

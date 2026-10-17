@@ -1,10 +1,17 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { readDb, updateDb } from "@/lib/server/db";
 import { getSessionUser, newId } from "@/lib/server/auth";
+import {
+  cleanText,
+  isValidEmail,
+  readJsonSafe,
+  sameOrigin,
+  toInt,
+} from "@/lib/server/security";
 
 // GET /api/reviews?slug=premium-almonds — list + summary
 export async function GET(req: NextRequest) {
-  const slug = new URL(req.url).searchParams.get("slug")?.trim();
+  const slug = cleanText(new URL(req.url).searchParams.get("slug") ?? "", 80);
   if (!slug) return NextResponse.json({ error: "slug required." }, { status: 400 });
 
   const db = await readDb();
@@ -30,24 +37,30 @@ export async function GET(req: NextRequest) {
 
 // POST /api/reviews { slug, rating, title?, comment } — login required, ek user ka ek review (dobara bhejne par update)
 export async function POST(req: NextRequest) {
+  if (!sameOrigin(req)) {
+    return NextResponse.json({ error: "Cross-origin request blocked." }, { status: 403 });
+  }
   const user = await getSessionUser(req);
   if (!user) return NextResponse.json({ error: "Login required to write a review." }, { status: 401 });
 
-  const body = await req.json().catch(() => ({}));
-  const slug = String(body.slug ?? "").trim();
-  const rating = Number(body.rating ?? 0);
-  const title = String(body.title ?? "").trim().slice(0, 80);
-  const comment = String(body.comment ?? "").trim().slice(0, 1000);
+  const parsed = await readJsonSafe(req, 10_000);
+  if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
+  const body = (parsed.data ?? {}) as Record<string, unknown>;
+
+  const slug = cleanText(body.slug, 80);
+  const rating = toInt(body.rating, 1, 5);
+  const title = cleanText(body.title, 80);
+  const comment = cleanText(body.comment, 1000);
 
   if (!slug) return NextResponse.json({ error: "Product required." }, { status: 400 });
-  if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+  if (rating < 1 || rating > 5) {
     return NextResponse.json({ error: "Please select 1 to 5 stars." }, { status: 400 });
   }
   if (comment.length < 3) {
     return NextResponse.json({ error: "Please write a few words about the product." }, { status: 400 });
   }
 
-  const saved: { review?: object | null; updated?: boolean; __error?: string } = await updateDb((db) => {
+  const saved = await updateDb((db) => {
     if (!db.products.some((p) => p.slug === slug)) throw new Error("Product not found.");
     const existing = db.reviews.find((r) => r.productSlug === slug && r.userId === user.id);
     if (existing) {
@@ -61,7 +74,7 @@ export async function POST(req: NextRequest) {
       id: newId("R-"),
       productSlug: slug,
       userId: user.id,
-      userName: user.name,
+      userName: cleanText(user.name, 80),
       rating,
       title,
       comment,
@@ -69,9 +82,9 @@ export async function POST(req: NextRequest) {
     };
     db.reviews.unshift(review);
     return { review, updated: false as boolean };
-  }).catch((e: Error) => ({ __error: e.message }) as unknown as { review: null });
+  }).catch((e: Error) => ({ __error: e.message }) as unknown as { review: null; updated: false });
 
-  if (saved.__error) {
+  if ("__error" in saved) {
     return NextResponse.json({ error: saved.__error }, { status: 400 });
   }
   return NextResponse.json(
@@ -82,9 +95,12 @@ export async function POST(req: NextRequest) {
 
 // DELETE /api/reviews?id= — apna review delete karo (login required)
 export async function DELETE(req: NextRequest) {
+  if (!sameOrigin(req)) {
+    return NextResponse.json({ error: "Cross-origin request blocked." }, { status: 403 });
+  }
   const user = await getSessionUser(req);
   if (!user) return NextResponse.json({ error: "Login required." }, { status: 401 });
-  const id = new URL(req.url).searchParams.get("id")?.trim();
+  const id = cleanText(new URL(req.url).searchParams.get("id") ?? "", 40);
   if (!id) return NextResponse.json({ error: "id required." }, { status: 400 });
 
   const removed = await updateDb((db) => {

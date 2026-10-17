@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { groups } from "@/lib/products";
 import { getCategories } from "@/lib/server/db";
+import { groups } from "@/lib/products";
 
 // GET /api/categories — dynamic category list (DB se)
 export async function GET() {

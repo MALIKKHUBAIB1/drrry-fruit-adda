@@ -8,6 +8,7 @@ import { useStore } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
 import { FreeShippingBar, Summary } from "@/components/site/CartSummary";
 import { cn } from "@/lib/utils";
+import { openRazorpayCheckout } from "@/lib/razorpay";
 
 const field =
   "w-full rounded-md border border-input bg-background px-3 py-2.5 text-sm outline-none focus:border-gold";
@@ -110,7 +111,6 @@ export default function CheckoutContent() {
         name: f.name || user.name,
         email: f.email || user.email,
       }));
-      // Saved address book
       fetch("/api/addresses", { credentials: "include" })
         .then((r) => r.json())
         .then((d) => {
@@ -162,7 +162,7 @@ export default function CheckoutContent() {
           <b className="text-foreground">{orderId}</b> is confirmed.
           {pay === "cod"
             ? " Keep cash/UPI ready for delivery."
-            : " Complete payment on the UPI link sent to your email."}
+            : " Payment received — confirmation sent to your email."}
         </p>
         <div className="mt-6 rounded-xl border border-gold/30 bg-card p-5 text-left text-sm">
           <div className="flex justify-between">
@@ -177,7 +177,7 @@ export default function CheckoutContent() {
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Payment</span>
-            <span>{placedAt.pay === "cod" ? "Cash on Delivery" : "UPI / Card / Netbanking"}</span>
+            <span>{placedAt.pay === "cod" ? "Cash on Delivery" : "Paid online (Razorpay)"}</span>
           </div>
           <div className="mt-2 flex justify-between border-t border-border pt-2 text-base font-semibold">
             <span>Total</span>
@@ -287,6 +287,41 @@ export default function CheckoutContent() {
             setPlacing(true);
             setPlaceError(null);
             try {
+              const isOnline = pay === "online";
+
+              // 1) Online payment: pehle Razorpay order banao
+              let rzp: { keyId: string; orderId: string; amount: number; currency: string } | null = null;
+              if (isOnline) {
+                const r = await fetch("/api/payments/create-order", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  credentials: "include",
+                  body: JSON.stringify({
+                    amount: Math.round(total * 100),
+                    receipt: `DFA-${Date.now().toString(36).toUpperCase()}`,
+                  }),
+                });
+                const d = await r.json().catch(() => ({}));
+                if (!r.ok) throw new Error(d.error || "Couldn't start payment.");
+                rzp = d;
+              }
+
+              // 2) Razorpay popup open karo (online only)
+              let paymentResult: { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string } | null = null;
+              if (isOnline && rzp) {
+                paymentResult = await openRazorpayCheckout({
+                  keyId: rzp.keyId,
+                  orderId: rzp.orderId,
+                  amount: rzp.amount,
+                  currency: rzp.currency,
+                  name: form.name,
+                  email: form.email,
+                  phone: form.phone,
+                  description: "Dryfruit Adda order",
+                });
+              }
+
+              // 3) DB order create karo
               const res = await fetch("/api/orders", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -308,7 +343,23 @@ export default function CheckoutContent() {
               const data = await res.json().catch(() => ({}));
               if (!res.ok) throw new Error(data.error || "Order place nahi ho paya.");
               const order = data.order;
-              // Naya address ho to address book me save kar lo
+
+              // 4) Online: signature verify + paid mark
+              if (isOnline && rzp && paymentResult) {
+                const v = await fetch("/api/payments/verify", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  credentials: "include",
+                  body: JSON.stringify({
+                    ...paymentResult,
+                    orderId: order.id,
+                  }),
+                });
+                const vd = await v.json().catch(() => ({}));
+                if (!v.ok) throw new Error(vd.error || "Payment verification failed.");
+              }
+
+              // Address book save
               if (saveAddress && !saved.some((a) => a.address === form.address && a.pin === form.pin)) {
                 fetch("/api/addresses", {
                   method: "POST",
@@ -325,6 +376,7 @@ export default function CheckoutContent() {
                   }),
                 }).catch(() => {});
               }
+
               setPlacedAt({
                 total: order.total,
                 count: order.items.reduce((s: number, x: { qty: number }) => s + x.qty, 0),
@@ -495,7 +547,7 @@ export default function CheckoutContent() {
                 },
                 {
                   k: "online",
-                  l: "UPI / Card / Netbanking",
+                  l: "UPI / Card / Netbanking (Razorpay)",
                   d: "Pay securely now via UPI, card or netbanking.",
                   Icon: QrCode,
                 },
@@ -523,22 +575,19 @@ export default function CheckoutContent() {
               </label>
             ))}
             <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Lock className="h-3.5 w-3.5" /> Payments are encrypted. Demo checkout — no money is
-              charged yet.
+              <Lock className="h-3.5 w-3.5" /> Payments are encrypted by Razorpay. Demo keys use test
+              mode.
             </p>
           </fieldset>
 
           <button disabled={placing} className="w-full rounded-md bg-primary py-3.5 font-medium text-primary-foreground hover:bg-cocoa disabled:opacity-60">
-            {placing ? "Placing order…" : `Place Order · ${inr(total)}`}
+            {placing ? "Processing…" : `Place Order · ${inr(total)}`}
           </button>
           {placeError && (
             <p role="alert" className="rounded-md border border-destructive/25 bg-destructive/[0.06] px-4 py-2.5 text-center text-sm text-destructive">
               {placeError}
             </p>
           )}
-          <p className="text-center text-xs text-muted-foreground">
-            By placing this order you agree to our shipping & returns policy.
-          </p>
         </form>
 
         <div className="space-y-4">

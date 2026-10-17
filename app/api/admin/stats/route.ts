@@ -1,8 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { readDb } from "@/lib/server/db";
 import { ADMIN_DENIED, requireAdmin } from "@/lib/server/admin";
+import { cleanText } from "@/lib/server/security";
 
-// GET /api/admin/stats — dashboard overview (admin only)
+// GET /api/admin/stats
 export async function GET(req: NextRequest) {
   const { status } = await requireAdmin(req);
   if (status !== 200) return NextResponse.json({ error: ADMIN_DENIED(status) }, { status });

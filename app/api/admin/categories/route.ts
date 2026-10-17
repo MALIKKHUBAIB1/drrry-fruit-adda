@@ -1,9 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { readDb, updateDb } from "@/lib/server/db";
 import { ADMIN_DENIED, requireAdmin } from "@/lib/server/admin";
-
-const slugify = (s: string) =>
-  s.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+import { cleanText, readJsonSafe, sameOrigin } from "@/lib/server/security";
 
 // GET /api/admin/categories — saari categories + product count
 export async function GET(req: NextRequest) {
@@ -17,14 +15,24 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ categories });
 }
 
+const slugify = (s: string) =>
+  s.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+
 // POST /api/admin/categories { name, slug?, image? }
 export async function POST(req: NextRequest) {
   const { status } = await requireAdmin(req);
   if (status !== 200) return NextResponse.json({ error: ADMIN_DENIED(status) }, { status });
-  const body = await req.json().catch(() => ({}));
-  const name = String(body.name ?? "").trim();
+  if (!sameOrigin(req)) {
+    return NextResponse.json({ error: "Cross-origin request blocked." }, { status: 403 });
+  }
+
+  const parsed = await readJsonSafe(req, 10_000);
+  if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
+  const body = (parsed.data ?? {}) as Record<string, unknown>;
+
+  const name = cleanText(body.name, 60);
   const slug = slugify(String(body.slug ?? "") || name);
-  const image = String(body.image ?? "").trim() || "/images/mixed.jpg";
+  const image = cleanText(body.image, 500) || "/images/mixed.jpg";
   if (name.length < 2) return NextResponse.json({ error: "Category name required." }, { status: 400 });
   if (!slug) return NextResponse.json({ error: "Valid slug required." }, { status: 400 });
 
@@ -38,30 +46,37 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ category }, { status: 201 });
 }
 
-// PUT /api/admin/categories { slug, name?, image? } — slug change nahi hota
+// PUT /api/admin/categories { slug, name?, image? }
 export async function PUT(req: NextRequest) {
   const { status } = await requireAdmin(req);
   if (status !== 200) return NextResponse.json({ error: ADMIN_DENIED(status) }, { status });
-  const body = await req.json().catch(() => ({}));
-  const slug = String(body.slug ?? "").trim();
+  if (!sameOrigin(req)) {
+    return NextResponse.json({ error: "Cross-origin request blocked." }, { status: 403 });
+  }
+
+  const parsed = await readJsonSafe(req, 10_000);
+  if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
+  const body = (parsed.data ?? {}) as Record<string, unknown>;
+
+  const slug = cleanText(body.slug, 80);
   if (!slug) return NextResponse.json({ error: "slug required." }, { status: 400 });
 
   const updated = await updateDb((db) => {
     const c = db.categories.find((x) => x.slug === slug);
     if (!c) return null;
-    if (typeof body.name === "string" && body.name.trim().length >= 2) c.name = body.name.trim();
-    if (typeof body.image === "string" && body.image.trim()) c.image = body.image.trim();
+    if (typeof body.name === "string" && cleanText(body.name, 60).length >= 2) c.name = cleanText(body.name, 60);
+    if (typeof body.image === "string" && cleanText(body.image, 500)) c.image = cleanText(body.image, 500);
     return c;
   });
   if (!updated) return NextResponse.json({ error: "Category not found." }, { status: 404 });
   return NextResponse.json({ category: updated });
 }
 
-// DELETE /api/admin/categories?slug= — sirf tab jab koi product use na karta ho
+// DELETE /api/admin/categories?slug=
 export async function DELETE(req: NextRequest) {
   const { status } = await requireAdmin(req);
   if (status !== 200) return NextResponse.json({ error: ADMIN_DENIED(status) }, { status });
-  const slug = new URL(req.url).searchParams.get("slug")?.trim();
+  const slug = cleanText(new URL(req.url).searchParams.get("slug") ?? "", 80);
   if (!slug) return NextResponse.json({ error: "slug required." }, { status: 400 });
 
   const done: boolean | { __error: string } = await updateDb((db) => {

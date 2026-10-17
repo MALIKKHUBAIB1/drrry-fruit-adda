@@ -1,9 +1,13 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { updateDb } from "@/lib/server/db";
 import { clearSessionCookie, getTokenFromRequest } from "@/lib/server/auth";
+import { sameOrigin } from "@/lib/server/security";
 
 // POST /api/auth/logout
 export async function POST(req: NextRequest) {
+  if (!sameOrigin(req)) {
+    return NextResponse.json({ error: "Cross-origin request blocked." }, { status: 403 });
+  }
   const token = getTokenFromRequest(req);
   if (token) {
     await updateDb((db) => {

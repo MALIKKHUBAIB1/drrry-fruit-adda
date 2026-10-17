@@ -8,21 +8,40 @@ import {
   sessionCookie,
   sessionExpiry,
 } from "@/lib/server/auth";
+import {
+  cleanText,
+  isValidEmail,
+  rateLimit,
+  readJsonSafe,
+  sameOrigin,
+} from "@/lib/server/security";
 
 // POST /api/auth/register { name, email, password }
 export async function POST(req: Request) {
-  const body = await req.json().catch(() => ({}));
-  const name = String(body.name ?? "").trim();
-  const email = String(body.email ?? "").trim().toLowerCase();
+  if (!sameOrigin(req)) {
+    return NextResponse.json({ error: "Cross-origin request blocked." }, { status: 403 });
+  }
+  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+  const rl = rateLimit(`register:${ip}`, 5, 60_000);
+  if (!rl.ok) {
+    return NextResponse.json({ error: "Too many attempts. Please try again later." }, { status: 429 });
+  }
+
+  const parsed = await readJsonSafe(req, 10_000);
+  if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
+  const body = (parsed.data ?? {}) as Record<string, unknown>;
+
+  const name = cleanText(body.name, 80);
+  const email = String(body.email ?? "").trim().toLowerCase().slice(0, 254);
   const password = String(body.password ?? "");
 
   if (name.length < 3)
     return NextResponse.json({ error: "Please enter your full name." }, { status: 400 });
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+  if (!isValidEmail(email))
     return NextResponse.json({ error: "Enter a valid email address." }, { status: 400 });
-  if (password.length < 6)
+  if (password.length < 6 || password.length > 128)
     return NextResponse.json(
-      { error: "Password must be at least 6 characters." },
+      { error: "Password must be 6–128 characters." },
       { status: 400 },
     );
 

@@ -1,9 +1,11 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { readDb } from "@/lib/server/db";
+import { getSessionUser } from "@/lib/server/auth";
+import { cleanText } from "@/lib/server/security";
 
 // GET /api/reviews/featured?limit=3 — home page testimonials ke liye best reviews
 export async function GET(req: Request) {
-  const limit = Math.min(12, Math.max(1, Number(new URL(req.url).searchParams.get("limit") ?? 3)));
+  const limit = Math.min(12, Math.max(1, Math.floor(Number(new URL(req.url).searchParams.get("limit") ?? 3))));
   const db = await readDb();
   const featured = db.reviews
     .filter((r) => r.rating >= 4)

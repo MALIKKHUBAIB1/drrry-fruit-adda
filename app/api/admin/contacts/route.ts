@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { readDb, updateDb } from "@/lib/server/db";
 import { ADMIN_DENIED, requireAdmin } from "@/lib/server/admin";
+import { cleanText, sameOrigin } from "@/lib/server/security";
 
 // GET /api/admin/contacts — contact messages (admin only)
 export async function GET(req: NextRequest) {
@@ -10,11 +11,14 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ contacts: db.contacts, count: db.contacts.length });
 }
 
-// DELETE /api/admin/contacts?id= — message delete karo
+// DELETE /api/admin/contacts?id=
 export async function DELETE(req: NextRequest) {
   const { status } = await requireAdmin(req);
   if (status !== 200) return NextResponse.json({ error: ADMIN_DENIED(status) }, { status });
-  const id = new URL(req.url).searchParams.get("id")?.trim();
+  if (!sameOrigin(req)) {
+    return NextResponse.json({ error: "Cross-origin request blocked." }, { status: 403 });
+  }
+  const id = cleanText(new URL(req.url).searchParams.get("id") ?? "", 40);
   if (!id) return NextResponse.json({ error: "id required." }, { status: 400 });
   const removed = await updateDb((db) => {
     const i = db.contacts.findIndex((c) => c.id === id);

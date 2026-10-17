@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
 import { readDb } from "@/lib/server/db";
+import {
+  cleanText,
+  readJsonSafe,
+  sameOrigin,
+} from "@/lib/server/security";
 
 // GET /api/coupons — active coupon list
 // POST /api/coupons { code, subtotal } — validate & compute discount
@@ -11,9 +16,15 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const body = await req.json().catch(() => ({}));
-  const code = String(body.code ?? "").trim().toUpperCase();
-  const subtotal = Number(body.subtotal ?? 0);
+  if (!sameOrigin(req)) {
+    return NextResponse.json({ error: "Cross-origin request blocked." }, { status: 403 });
+  }
+  const parsed = await readJsonSafe(req, 10_000);
+  if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
+  const body = (parsed.data ?? {}) as Record<string, unknown>;
+
+  const code = cleanText(body.code, 20).toUpperCase();
+  const subtotal = Math.max(0, Math.floor(Number(body.subtotal ?? 0)));
 
   const db = await readDb();
   const coupon = db.coupons.find((c) => c.code === code && c.active);

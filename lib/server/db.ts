@@ -77,6 +77,9 @@ export type DbOrder = {
   pin: string;
   notes: string;
   payment: "cod" | "online";
+  paymentId?: string;
+  razorpayOrderId?: string;
+  paidAt?: string;
   status: "placed" | "shipped" | "delivered" | "cancelled";
   createdAt: string;
 };
