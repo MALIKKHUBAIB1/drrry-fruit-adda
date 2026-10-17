@@ -2,24 +2,41 @@ import { NextResponse, type NextRequest } from "next/server";
 import { readDb, updateDb, type DbPincode } from "@/lib/server/db";
 import { ADMIN_DENIED, requireAdmin } from "@/lib/server/admin";
 import { cleanText, isValidPin, readJsonSafe, sameOrigin, toInt } from "@/lib/server/security";
-import { ZONE_DEFAULT_CHARGES, ZONES } from "@/lib/server/pincode";
+import {
+  FREE_SHIPPING_ABOVE,
+  ZONES,
+  ZONE_DEFAULT_CHARGES,
+  ZONE_LABEL,
+  datasetCount,
+  listAllPincodes,
+  zoneCharge,
+} from "@/lib/server/pincode";
 
-// GET /api/admin/pincodes?q=&zone= — list
+// GET /api/admin/pincodes?q=&zone=&page=&limit= — saare India pincodes + dummy charges
 export async function GET(req: NextRequest) {
   const { status } = await requireAdmin(req);
   if (status !== 200) return NextResponse.json({ error: ADMIN_DENIED(status) }, { status });
   const sp = new URL(req.url).searchParams;
-  const q = cleanText(sp.get("q") ?? "", 80).toLowerCase();
+  const q = cleanText(sp.get("q") ?? "", 80);
   const zone = cleanText(sp.get("zone") ?? "", 20);
+  const page = toInt(sp.get("page") ?? 1, 1, 100000);
+  const limit = Math.min(500, Math.max(10, toInt(sp.get("limit") ?? 50, 10, 500)));
 
   const db = await readDb();
-  let list = [...db.pincodes].sort((a, b) => a.pin.localeCompare(b.pin));
-  if (zone) list = list.filter((p) => p.zone === zone);
-  if (q) list = list.filter((p) => `${p.pin} ${p.city} ${p.state} ${p.district}`.toLowerCase().includes(q));
-  return NextResponse.json({ pincodes: list, count: list.length, zones: ZONES, defaultCharges: ZONE_DEFAULT_CHARGES });
+  const result = listAllPincodes({ q, zone, page, limit, overrides: db.pincodes });
+
+  return NextResponse.json({
+    ...result,
+    overrides: db.pincodes.length,
+    totalInDataset: datasetCount(),
+    zones: ZONES,
+    zoneLabels: ZONE_LABEL,
+    defaultCharges: ZONE_DEFAULT_CHARGES,
+    freeShippingAbove: FREE_SHIPPING_ABOVE,
+  });
 }
 
-// POST /api/admin/pincodes — add/update pincode
+// POST /api/admin/pincodes — custom charge set karo (override)
 export async function POST(req: NextRequest) {
   const { status } = await requireAdmin(req);
   if (status !== 200) return NextResponse.json({ error: ADMIN_DENIED(status) }, { status });
@@ -32,33 +49,48 @@ export async function POST(req: NextRequest) {
   const pin = cleanText(body.pin, 6);
   if (!isValidPin(pin)) return NextResponse.json({ error: "Enter a valid 6-digit PIN code." }, { status: 400 });
 
-  const city = cleanText(body.city, 80);
-  const state = cleanText(body.state, 80);
-  const district = cleanText(body.district, 80);
   const zoneRaw = cleanText(body.zone, 20) as DbPincode["zone"];
-  if (!city) return NextResponse.json({ error: "City is required." }, { status: 400 });
-  if (!state) return NextResponse.json({ error: "State is required." }, { status: 400 });
-  if (!ZONES.includes(zoneRaw)) return NextResponse.json({ error: "Invalid zone." }, { status: 400 });
+  const zone = ZONES.includes(zoneRaw) ? zoneRaw : undefined;
+  const db = await readDb();
+  const list = listAllPincodes({ q: pin, page: 1, limit: 5, overrides: db.pincodes });
+  const found = list.rows.find((r) => r.pin === pin);
 
-  const shipping = toInt(body.shipping, 0, 100000);
-  const codAvailable = body.codAvailable !== false;
-  const serviceable = body.serviceable !== false;
+  const city = cleanText(body.city, 80) || found?.city || "";
+  const state = cleanText(body.state, 80) || found?.state || "";
+  const district = cleanText(body.district, 80) || found?.district || "";
+  if (!city || !state)
+    return NextResponse.json({ error: "City and state are required." }, { status: 400 });
 
-  const saved = await updateDb((db) => {
-    const i = db.pincodes.findIndex((p) => p.pin === pin);
-    const row: DbPincode = { pin, city, state, district, zone: zoneRaw, shipping, codAvailable, serviceable };
+  const finalZone = zone ?? found?.zone ?? "tier2";
+  const shipping = body.shipping !== undefined
+    ? toInt(body.shipping, 0, 100000)
+    : zoneCharge(finalZone);
+
+  const row: DbPincode = {
+    pin,
+    city,
+    state,
+    district,
+    zone: finalZone,
+    shipping,
+    codAvailable: body.codAvailable !== false,
+    serviceable: body.serviceable !== false,
+  };
+
+  const updated = await updateDb((d) => {
+    const i = d.pincodes.findIndex((p) => p.pin === pin);
     if (i >= 0) {
-      db.pincodes[i] = row;
-      return { row, updated: true as const };
+      d.pincodes[i] = row;
+      return true as const;
     }
-    db.pincodes.push(row);
-    return { row, updated: false as const };
+    d.pincodes.push(row);
+    return false as const;
   });
 
-  return NextResponse.json({ pincode: saved.row, updated: saved.updated }, { status: saved.updated ? 200 : 201 });
+  return NextResponse.json({ pincode: row, updated }, { status: updated ? 200 : 201 });
 }
 
-// DELETE /api/admin/pincodes?pin= — hatao (wapas default zone charge lagega)
+// DELETE /api/admin/pincodes?pin= — override hatao (dummy zone charge wapas)
 export async function DELETE(req: NextRequest) {
   const { status } = await requireAdmin(req);
   if (status !== 200) return NextResponse.json({ error: ADMIN_DENIED(status) }, { status });
@@ -70,6 +102,6 @@ export async function DELETE(req: NextRequest) {
     db.pincodes.splice(i, 1);
     return true;
   });
-  if (!removed) return NextResponse.json({ error: "Pincode not found." }, { status: 404 });
+  if (!removed) return NextResponse.json({ error: "No custom override for this PIN." }, { status: 404 });
   return NextResponse.json({ ok: true });
 }

@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { isValidPin } from "@/lib/server/security";
-import { ZONE_DEFAULT_CHARGES, ZONES, lookupPincode } from "@/lib/server/pincode";
+import { FREE_SHIPPING_ABOVE, ZONES, ZONE_DEFAULT_CHARGES, ZONE_LABEL, lookupPincode } from "@/lib/server/pincode";
 
-// GET /api/pincode?pin=110001 — pincode lookup + zone shipping charge
+// GET /api/pincode?pin=110001 — city/state + delivery charge lookup
 export async function GET(req: Request) {
   const pin = new URL(req.url).searchParams.get("pin")?.trim() ?? "";
   if (!isValidPin(pin)) {
@@ -15,5 +15,13 @@ export async function GET(req: Request) {
       { status: 404 },
     );
   }
-  return NextResponse.json({ ...result, zones: ZONES, defaultCharges: ZONE_DEFAULT_CHARGES });
+  return NextResponse.json({
+    ...result,
+    codAvailable: true,
+    serviceable: true,
+    freeShippingAbove: FREE_SHIPPING_ABOVE,
+    zones: ZONES,
+    zoneLabels: ZONE_LABEL,
+    defaultCharges: ZONE_DEFAULT_CHARGES,
+  });
 }

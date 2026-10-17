@@ -1357,11 +1357,20 @@ function PromoTab({ promo, reload }: { promo: any; reload: () => void }) {
   );
 }
 
+
 function PincodesTab({ reload }: { reload: () => void }) {
-  const [list, setList] = useState<any[]>([]);
+  const [rows, setRows] = useState<any[]>([]);
+  const [total, setTotal] = useState(0);
+  const [totalInDataset, setTotalInDataset] = useState(0);
+  const [overrides, setOverrides] = useState(0);
+  const [defaults, setDefaults] = useState<Record<string, number>>({});
+  const [zoneLabels, setZoneLabels] = useState<Record<string, string>>({});
+  const [freeAbove, setFreeAbove] = useState(999);
   const [q, setQ] = useState("");
   const [zoneF, setZoneF] = useState("");
-  const [defaults, setDefaults] = useState<Record<string, number>>({});
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(50);
+  const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({
     pin: "", city: "", state: "", district: "",
     zone: "tier2", shipping: "69", codAvailable: true, serviceable: true,
@@ -1370,13 +1379,27 @@ function PincodesTab({ reload }: { reload: () => void }) {
   const [err, setErr] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const sp = new URLSearchParams();
-    if (q) sp.set("q", q);
-    if (zoneF) sp.set("zone", zoneF);
-    const d = await j(`/api/admin/pincodes?${sp.toString()}`);
-    setList(d.pincodes);
-    setDefaults(d.defaultCharges ?? {});
-  }, [q, zoneF]);
+    setLoading(true);
+    try {
+      const sp = new URLSearchParams();
+      if (q) sp.set("q", q);
+      if (zoneF) sp.set("zone", zoneF);
+      sp.set("page", String(page));
+      sp.set("limit", String(limit));
+      const d = await j(`/api/admin/pincodes?${sp.toString()}`);
+      setRows(d.rows);
+      setTotal(d.total);
+      setTotalInDataset(d.totalInDataset ?? 0);
+      setOverrides(d.overrides ?? 0);
+      setDefaults(d.defaultCharges ?? {});
+      setZoneLabels(d.zoneLabels ?? {});
+      setFreeAbove(d.freeShippingAbove ?? 999);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Couldn't load pincodes.");
+    } finally {
+      setLoading(false);
+    }
+  }, [q, zoneF, page, limit]);
 
   useEffect(() => { load().catch(() => {}); }, [load]);
 
@@ -1394,12 +1417,20 @@ function PincodesTab({ reload }: { reload: () => void }) {
         district: d.district || f.district,
         zone: d.zone,
         shipping: String(d.shipping),
-        codAvailable: d.codAvailable,
-        serviceable: d.serviceable,
       }));
+      setPage(1);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Lookup failed.");
     } finally { setBusy(false); }
+  };
+
+  const editRow = (r: any) => {
+    setForm({
+      pin: r.pin, city: r.city, state: r.state, district: r.district,
+      zone: r.zone, shipping: String(r.shipping),
+      codAvailable: true, serviceable: true,
+    });
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const save = async (e: React.FormEvent) => {
@@ -1413,40 +1444,53 @@ function PincodesTab({ reload }: { reload: () => void }) {
       });
       setForm({ pin: "", city: "", state: "", district: "", zone: "tier2", shipping: String(defaults.tier2 ?? 69), codAvailable: true, serviceable: true });
       await load();
+      reload();
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Couldn't save pincode.");
     } finally { setBusy(false); }
   };
 
-  const remove = async (pin: string) => {
-    if (!confirm(`Remove ${pin}? Default zone charges apply again.`)) return;
-    try { await j(`/api/admin/pincodes?pin=${pin}`, { method: "DELETE" }); await load(); reload(); }
-    catch (e) { alert(e instanceof Error ? e.message : "Couldn't delete."); }
+  const resetRow = async (pin: string) => {
+    if (!confirm(`Remove custom charge for ${pin}? Default zone charge will apply.`)) return;
+    try {
+      await j(`/api/admin/pincodes?pin=${pin}`, { method: "DELETE" });
+      await load();
+      reload();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Couldn't reset.");
+    }
   };
 
   const F = "w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-gold";
   const L = "block text-xs font-semibold uppercase tracking-wider text-muted-foreground";
+  const totalPages = Math.max(1, Math.ceil(total / limit));
 
   return (
     <div className="space-y-5">
-      {/* Zone defaults info */}
+      {/* Zone defaults */}
       <div className="rounded-xl border border-gold/30 bg-gold/[0.05] p-4">
-        <p className="font-semibold">Default zone charges (apne aap lagte hain)</p>
-        <div className="mt-2 flex flex-wrap gap-2 text-xs">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="font-semibold">Default zone charges (dummy, applied automatically)</p>
+          <span className="text-xs text-muted-foreground">
+            {totalInDataset.toLocaleString("en-IN")} pincodes · {overrides} custom
+          </span>
+        </div>
+        <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           {Object.entries(defaults).map(([z, v]) => (
-            <span key={z} className="rounded-full bg-card px-3 py-1 font-medium capitalize shadow-sm">
-              {z}: ₹{v}
-            </span>
+            <div key={z} className="rounded-lg bg-card px-3 py-2 shadow-sm">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{zoneLabels[z] ?? z}</p>
+              <p className="font-display text-xl font-semibold text-primary">₹{v}</p>
+            </div>
           ))}
         </div>
         <p className="mt-2 text-xs text-muted-foreground">
-          Neeche koi pincode add karoge to uske liye custom charge set ho jayega. Free shipping ₹999+ par.
+          Har pincode ka charge zone se auto aata hai. Neeche kisi pincode par charge change karoge to wo custom override ban jayega. Free shipping ₹{freeAbove}+ par.
         </p>
       </div>
 
-      {/* Add form */}
+      {/* Add / override form */}
       <form onSubmit={save} className="space-y-3 rounded-xl border border-border bg-card p-5">
-        <h3 className="font-semibold">Add / update pincode</h3>
+        <h3 className="font-semibold">Set custom charge for a pincode</h3>
         <div className="grid gap-3 sm:grid-cols-3">
           <label className="text-sm font-medium">
             <span className={L}>PIN code *</span>
@@ -1465,18 +1509,18 @@ function PincodesTab({ reload }: { reload: () => void }) {
           </label>
           <label className="text-sm font-medium">
             <span className={L}>District</span>
-            <input value={form.district} onChange={(e) => setForm({ ...form, district: e.target.value })} placeholder="Central Delhi" className={`${F} mt-1.5`} />
+            <input value={form.district} onChange={(e) => setForm({ ...form, district: e.target.value })} placeholder="New Delhi" className={`${F} mt-1.5`} />
           </label>
           <label className="text-sm font-medium">
             <span className={L}>Zone</span>
             <select value={form.zone} onChange={(e) => setForm({ ...form, zone: e.target.value, shipping: String(defaults[e.target.value] ?? 69) })} className={`${F} mt-1.5`}>
-              {["metro", "tier2", "tier3", "remote"].map((z) => (
-                <option key={z} value={z}>{z} (₹{defaults[z] ?? "—"})</option>
+              {Object.keys(defaults).map((z) => (
+                <option key={z} value={z}>{zoneLabels[z] ?? z} (₹{defaults[z]})</option>
               ))}
             </select>
           </label>
           <label className="text-sm font-medium">
-            <span className={L}>Shipping charge (₹) *</span>
+            <span className={L}>Delivery charge (₹) *</span>
             <input value={form.shipping} onChange={(e) => setForm({ ...form, shipping: e.target.value })} required type="number" min={0} max={100000} className={`${F} mt-1.5`} />
           </label>
         </div>
@@ -1490,33 +1534,83 @@ function PincodesTab({ reload }: { reload: () => void }) {
         </div>
         {err && <p role="alert" className="rounded-md border border-destructive/25 bg-destructive/[0.06] px-4 py-2.5 text-sm text-destructive">{err}</p>}
         <button disabled={busy} className="rounded-md bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground hover:bg-cocoa disabled:opacity-60">
-          {busy ? "Saving…" : "Save pincode"}
+          {busy ? "Saving…" : "Save custom charge"}
         </button>
       </form>
 
-      {/* List */}
-      <div className="flex flex-wrap gap-2">
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search PIN, city, state…" className="min-w-0 flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm" />
-        <select value={zoneF} onChange={(e) => setZoneF(e.target.value)} className="rounded-md border border-input bg-background px-3 py-2 text-sm">
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-2">
+        <input value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} placeholder="Search PIN, city, district, state…" className="min-w-0 flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm" />
+        <select value={zoneF} onChange={(e) => { setZoneF(e.target.value); setPage(1); }} className="rounded-md border border-input bg-background px-3 py-2 text-sm">
           <option value="">All zones</option>
-          {["metro", "tier2", "tier3", "remote"].map((z) => <option key={z} value={z}>{z}</option>)}
+          {Object.keys(defaults).map((z) => <option key={z} value={z}>{zoneLabels[z] ?? z}</option>)}
+        </select>
+        <select value={limit} onChange={(e) => { setLimit(Number(e.target.value)); setPage(1); }} className="rounded-md border border-input bg-background px-3 py-2 text-sm">
+          {[50, 100, 200, 500].map((n) => <option key={n} value={n}>{n} / page</option>)}
         </select>
       </div>
-      <ul className="space-y-2">
-        {list.map((p) => (
-          <li key={p.pin} className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card p-3 text-sm">
-            <b className="font-mono">{p.pin}</b>
-            <span className="min-w-0 flex-1 truncate">{p.city}{p.district ? `, ${p.district}` : ""}, {p.state}</span>
-            <span className="rounded-full bg-gold/15 px-2.5 py-0.5 text-[11px] font-medium capitalize text-cocoa">{p.zone}</span>
-            <span className="font-semibold text-primary">₹{p.shipping}</span>
-            {!p.codAvailable && <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-[11px] text-destructive">No COD</span>}
-            {!p.serviceable && <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-[11px] text-destructive">Not serviceable</span>}
-            <button onClick={() => setForm({ pin: p.pin, city: p.city, state: p.state, district: p.district, zone: p.zone, shipping: String(p.shipping), codAvailable: p.codAvailable, serviceable: p.serviceable })} className="rounded-md border border-input px-3 py-1 text-xs hover:border-gold">Edit</button>
-            <button onClick={() => remove(p.pin)} className="text-xs text-destructive hover:underline">Delete</button>
-          </li>
-        ))}
-        {list.length === 0 && <p className="py-8 text-center text-sm text-muted-foreground">No custom pincodes yet — default zone charges apply.</p>}
-      </ul>
+
+      <p className="text-xs text-muted-foreground">
+        Showing {rows.length} of {total.toLocaleString("en-IN")} pincodes · Page {page} of {totalPages}
+      </p>
+
+      {/* List */}
+      {loading ? (
+        <p className="py-10 text-center text-sm text-muted-foreground">Loading pincodes…</p>
+      ) : (
+        <div className="overflow-x-auto rounded-xl border border-border">
+          <table className="w-full text-sm">
+            <thead className="bg-secondary/60">
+              <tr className="text-left text-xs uppercase tracking-wider text-muted-foreground">
+                <th className="px-3 py-2.5">PIN</th>
+                <th className="px-3 py-2.5">City / District</th>
+                <th className="px-3 py-2.5">State</th>
+                <th className="px-3 py-2.5">Zone</th>
+                <th className="px-3 py-2.5 text-right">Charge</th>
+                <th className="px-3 py-2.5 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.pin} className="border-t border-border/60 hover:bg-secondary/30">
+                  <td className="px-3 py-2 font-mono font-semibold">{r.pin}</td>
+                  <td className="px-3 py-2">
+                    {r.city}
+                    {r.district && <span className="block text-xs text-muted-foreground">{r.district}</span>}
+                  </td>
+                  <td className="px-3 py-2 text-xs">{r.state}</td>
+                  <td className="px-3 py-2">
+                    <span className={cn(
+                      "rounded-full px-2 py-0.5 text-[11px] font-medium capitalize",
+                      r.zone === "metro" ? "bg-primary/10 text-primary"
+                      : r.zone === "remote" ? "bg-destructive/10 text-destructive"
+                      : "bg-gold/15 text-cocoa",
+                    )}>{r.zone}</span>
+                  </td>
+                  <td className="px-3 py-2 text-right font-semibold text-primary">₹{r.shipping}</td>
+                  <td className="px-3 py-2 text-right">
+                    <span className="mr-2 inline-flex items-center gap-1.5">
+                      <button onClick={() => editRow(r)} className="rounded border border-input px-2 py-0.5 text-xs hover:border-gold">Edit</button>
+                      {r.source === "override" && (
+                        <button onClick={() => resetRow(r.pin)} className="text-xs text-muted-foreground hover:text-destructive">Reset</button>
+                      )}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-2">
+          <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1} className="rounded-md border border-input px-4 py-2 text-sm disabled:opacity-40">Previous</button>
+          <span className="text-sm">Page {page} / {totalPages}</span>
+          <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="rounded-md border border-input px-4 py-2 text-sm disabled:opacity-40">Next</button>
+        </div>
+      )}
     </div>
   );
 }
