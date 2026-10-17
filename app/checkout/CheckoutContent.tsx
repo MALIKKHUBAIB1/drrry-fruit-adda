@@ -9,7 +9,7 @@ import { useAuth } from "@/lib/auth";
 import { FreeShippingBar, Summary } from "@/components/site/CartSummary";
 import { cn } from "@/lib/utils";
 import { openRazorpayCheckout } from "@/lib/razorpay";
-import { etaLabel, optionsOf, type DeliveryOption } from "@/lib/products";
+import { etaLabel, optionsOf, FREE_SHIPPING_ABOVE, type DeliveryOption } from "@/lib/products";
 
 const field =
   "w-full rounded-md border border-input bg-background px-3 py-2.5 text-sm outline-none focus:border-gold";
@@ -89,6 +89,14 @@ export default function CheckoutContent() {
   const { user } = useAuth();
   const [pay, setPay] = useState("cod");
 
+  const [pinInfo, setPinInfo] = useState<{
+    city: string; state: string; district: string; zone: string;
+    shipping: number; serviceable: boolean; codAvailable: boolean;
+  } | null>(null);
+  const [pinErr, setPinErr] = useState<string | null>(null);
+  const [pinLoading, setPinLoading] = useState(false);
+
+
   // Delivery options — cart ke products se combine (per id: max surcharge, max days)
   const deliveryOptions: DeliveryOption[] = useMemo(() => {
     const byId = new Map<string, DeliveryOption>();
@@ -117,7 +125,10 @@ export default function CheckoutContent() {
   }, [deliveryOptions, deliveryId]);
 
   const activeOption = deliveryOptions.find((o) => o.id === deliveryId);
-  const zoneShipping = shipping;
+  // Zone charge: PIN verify ho gaya to uska asli charge, warna store ka estimate.
+  // Free shipping threshold ke baad zone charge 0 ho jaata hai.
+  const freeApplied = subtotal - discount <= 0 || subtotal - discount >= FREE_SHIPPING_ABOVE;
+  const zoneShipping = pinInfo ? (freeApplied ? 0 : pinInfo.shipping) : shipping;
   const optionSurcharge = activeOption?.surcharge ?? 0;
   const liveShipping = zoneShipping + optionSurcharge;
   const liveTotal = subtotal - discount + liveShipping;
@@ -137,13 +148,6 @@ export default function CheckoutContent() {
     { id: string; label: string; name: string; phone: string; address: string; city: string; state: string; pin: string; isDefault: boolean }[]
   >([]);
   const [saveAddress, setSaveAddress] = useState(true);
-  const [pinInfo, setPinInfo] = useState<{
-    city: string; state: string; district: string; zone: string;
-    shipping: number; serviceable: boolean; codAvailable: boolean;
-  } | null>(null);
-  const [pinErr, setPinErr] = useState<string | null>(null);
-  const [pinLoading, setPinLoading] = useState(false);
-
   const checkPin = async (pin: string) => {
     if (!/^[1-9]\d{5}$/.test(pin)) {
       setPinInfo(null);
@@ -414,7 +418,7 @@ export default function CheckoutContent() {
                 }),
               });
               const data = await res.json().catch(() => ({}));
-              if (!res.ok) throw new Error(data.error || "Order place nahi ho paya.");
+              if (!res.ok) throw new Error(data.error || "Couldn't place your order.");
               const order = data.order;
 
               // 4) Online: signature verify + paid mark
@@ -460,7 +464,7 @@ export default function CheckoutContent() {
               setOrderId(order.id);
               clear();
             } catch (err) {
-              setPlaceError(err instanceof Error ? err.message : "Order place nahi ho paya.");
+              setPlaceError(err instanceof Error ? err.message : "Couldn't place your order.");
             } finally {
               setPlacing(false);
             }

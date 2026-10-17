@@ -179,7 +179,15 @@ export function Summary({
       )}
       <div className="flex justify-between text-sm">
         <span className="text-muted-foreground">Shipping</span>
-        <span>{shipping === 0 ? <b className="text-primary">Free</b> : inr(shipping)}</span>
+        <span>
+          {shipping === 0 ? (
+            <b className="text-primary">Free</b>
+          ) : (
+            <span className="text-xs text-muted-foreground">
+              calculated at checkout (PIN code)
+            </span>
+          )}
+        </span>
       </div>
       <div className="flex justify-between border-t border-border pt-3 text-lg font-semibold">
         <span>Total</span>

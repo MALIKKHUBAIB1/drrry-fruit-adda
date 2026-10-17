@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { readDb, type DbPincode } from "./db";
+import { FREE_SHIPPING_ABOVE } from "@/lib/products";
 
 export type Zone = "metro" | "tier2" | "tier3" | "remote";
 
@@ -21,7 +22,7 @@ export const ZONE_LABEL: Record<Zone, string> = {
   remote: "North-east & remote areas",
 };
 
-export const FREE_SHIPPING_ABOVE = 999;
+export { FREE_SHIPPING_ABOVE };
 
 /**
  * Dummy zone logic (India Post circle ke hisaab se).

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 const pages: Record<string, { title: string; body: string }> = {
-  shipping: { title: "Shipping Policy", body: "We ship across India. Orders above ₹999 ship free; a flat ₹79 applies below that. Most orders are dispatched within 1–2 working days." },
+  shipping: { title: "Shipping Policy", body: "We ship across India. Orders above ₹999 ship free. Below that, delivery is charged based on your PIN code zone: metro ₹49, tier-2 ₹69, tier-3 ₹89 and remote areas ₹119. Express and same-day options are available at checkout. Most orders are dispatched within 1–2 working days." },
   returns: { title: "Return & Refund Policy", body: "As food products, items can be returned only if they arrive damaged or incorrect. Contact us within 48 hours of delivery with photos and we'll make it right." },
   privacy: { title: "Privacy Policy", body: "We collect only the details needed to process and deliver your orders, and never sell your personal information." },
   terms: { title: "Terms & Conditions", body: "By using this website you agree to our terms of sale. Prices and availability may change without notice." },

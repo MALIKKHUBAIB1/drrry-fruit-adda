@@ -300,5 +300,8 @@ export const useStore = () => {
 };
 
 export const SHIPPING_FREE_ABOVE = 999;
+// Cart par exact charge nahi pata hota (PIN zone + delivery speed decide karta hai),
+// isliye yahan sirf free-shipping threshold ka estimate dikhaya jaata hai.
+// Asli charge checkout par pincode ke hisaab se lagta hai.
 export const shippingFor = (subtotal: number) =>
   subtotal === 0 || subtotal >= SHIPPING_FREE_ABOVE ? 0 : 79;

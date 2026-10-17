@@ -694,7 +694,7 @@ function ProductsTab({ products, cats, reload }: { products: any[]; cats: any[];
           </div>
 
           <div className="rounded-lg border border-border bg-secondary/50 p-4">
-            <p className={L}>SEO — Google me kaise dikhega</p>
+            <p className={L}>SEO — How it looks on Google</p>
             <div className="mt-3 grid gap-4 sm:grid-cols-2">
               <label className="text-sm font-medium">
                 <span className="flex items-center justify-between text-xs text-muted-foreground">
@@ -703,7 +703,7 @@ function ProductsTab({ products, cats, reload }: { products: any[]; cats: any[];
                     {editor.form.metaTitle.trim().length}/60
                   </span>
                 </span>
-                <input value={editor.form.metaTitle} onChange={(e) => set({ metaTitle: e.target.value })} maxLength={120} placeholder="Khali = auto (product name + Buy Online)" className={`${F} mt-1.5`} />
+                <input value={editor.form.metaTitle} onChange={(e) => set({ metaTitle: e.target.value })} maxLength={120} placeholder="Leave empty for auto (product name + Buy Online)" className={`${F} mt-1.5`} />
               </label>
               <label className="text-sm font-medium">
                 <span className="flex items-center justify-between text-xs text-muted-foreground">
@@ -712,7 +712,7 @@ function ProductsTab({ products, cats, reload }: { products: any[]; cats: any[];
                     {editor.form.metaDescription.trim().length}/160
                   </span>
                 </span>
-                <textarea value={editor.form.metaDescription} onChange={(e) => set({ metaDescription: e.target.value })} maxLength={320} rows={3} placeholder="Khali = auto (description + rating + price)" className={`${F} mt-1.5 resize-y`} />
+                <textarea value={editor.form.metaDescription} onChange={(e) => set({ metaDescription: e.target.value })} maxLength={320} rows={3} placeholder="Leave empty for auto (description + rating + price)" className={`${F} mt-1.5 resize-y`} />
               </label>
             </div>
             <div className="mt-3 rounded-lg border border-border bg-white p-3">
@@ -724,11 +724,11 @@ function ProductsTab({ products, cats, reload }: { products: any[]; cats: any[];
                 {(editor.form.metaTitle.trim() || `${editor.form.name || "Product name"} — Buy Online`) + " | Dryfruit Adda"}
               </p>
               <p className="line-clamp-2 text-[13px] text-[#4d5156]">
-                {editor.form.metaDescription.trim() || editor.form.description || "Meta description yahan dikhegi…"}
+                {editor.form.metaDescription.trim() || editor.form.description || "Meta description will appear here…"}
               </p>
             </div>
             <p className="mt-2 text-xs text-muted-foreground">
-              Khali chhodne par title/description automatically ban jaate hain. 60/160 characters se zyada Google kaat deta hai.
+              Leave empty and the title/description are generated automatically. Google truncates beyond 60/160 characters.
             </p>
           </div>
 
@@ -1308,10 +1308,10 @@ function HampersTab({ hampers, reload }: { hampers: any[]; reload: () => void })
           </div>
 
           <div className="rounded-lg border border-border bg-secondary/50 p-4">
-            <p className={L}>SEO — Google me kaise dikhega</p>
+            <p className={L}>SEO — How it looks on Google</p>
             <div className="mt-3 grid gap-4 sm:grid-cols-2">
-              <label className="text-sm font-medium"><span className="flex items-center justify-between text-xs text-muted-foreground">Meta title<span className={cn(editor.form.metaTitle.trim().length > 60 && "font-semibold text-destructive")}>{editor.form.metaTitle.trim().length}/60</span></span><input value={editor.form.metaTitle} onChange={(e) => set({ metaTitle: e.target.value })} maxLength={120} placeholder="Khali = auto" className={`${F} mt-1.5`} /></label>
-              <label className="text-sm font-medium"><span className="flex items-center justify-between text-xs text-muted-foreground">Meta description<span className={cn(editor.form.metaDescription.trim().length > 160 && "font-semibold text-destructive")}>{editor.form.metaDescription.trim().length}/160</span></span><textarea value={editor.form.metaDescription} onChange={(e) => set({ metaDescription: e.target.value })} maxLength={320} rows={3} placeholder="Khali = auto" className={`${F} mt-1.5 resize-y`} /></label>
+              <label className="text-sm font-medium"><span className="flex items-center justify-between text-xs text-muted-foreground">Meta title<span className={cn(editor.form.metaTitle.trim().length > 60 && "font-semibold text-destructive")}>{editor.form.metaTitle.trim().length}/60</span></span><input value={editor.form.metaTitle} onChange={(e) => set({ metaTitle: e.target.value })} maxLength={120} placeholder="Leave empty for auto" className={`${F} mt-1.5`} /></label>
+              <label className="text-sm font-medium"><span className="flex items-center justify-between text-xs text-muted-foreground">Meta description<span className={cn(editor.form.metaDescription.trim().length > 160 && "font-semibold text-destructive")}>{editor.form.metaDescription.trim().length}/160</span></span><textarea value={editor.form.metaDescription} onChange={(e) => set({ metaDescription: e.target.value })} maxLength={320} rows={3} placeholder="Leave empty for auto" className={`${F} mt-1.5 resize-y`} /></label>
             </div>
           </div>
 

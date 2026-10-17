@@ -218,8 +218,8 @@ export default function About() {
             Our promise in every pack
           </h2>
           <p className="mx-auto mt-4 max-w-xl text-center text-lg text-muted-foreground">
-            Four cheezein jo hum kabhi compromise nahi karte — chahe chota pack ho ya shaadi wala
-            hamper.
+            Four things we never compromise on — whether it is a small everyday pack or a grand
+            wedding hamper.
           </p>
           <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {values.map(({ icon: I, t, d }) => (
@@ -276,7 +276,7 @@ export default function About() {
             Small adda, big dreams
           </h2>
           <p className="mt-4 max-w-xl text-lg text-cocoa-foreground/70">
-            Kitchen shelf se lekar 120+ cities tak — ye safar aapke bharose se bana hai.
+            From a small kitchen shelf to 120+ cities — this journey was built on your trust.
           </p>
           <ol className="mt-12 grid gap-5 md:grid-cols-4">
             {timeline.map((t) => (

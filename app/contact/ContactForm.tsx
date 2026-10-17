@@ -45,10 +45,10 @@ export default function ContactForm({ labelCls, inputCls }: { labelCls: string; 
             }),
           });
           const data = await res.json().catch(() => ({}));
-          if (!res.ok) throw new Error(data.error || "Message send nahi ho paya.");
+          if (!res.ok) throw new Error(data.error || "Couldn't send your message.");
           setSent(true);
         } catch (e) {
-          setErr(e instanceof Error ? e.message : "Message send nahi ho paya.");
+          setErr(e instanceof Error ? e.message : "Couldn't send your message.");
         } finally {
           setBusy(false);
         }

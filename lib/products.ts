@@ -1,3 +1,5 @@
+export const FREE_SHIPPING_ABOVE = 999;
+
 export type Variant = { label: string; price: number; mrp: number };
 
 // Delivery option — har product me 1..3 options
