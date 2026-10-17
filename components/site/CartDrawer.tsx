@@ -2,17 +2,19 @@
 
 import Link from "next/link";
 import { Heart, Minus, Plus, ShoppingBag, Trash2, X } from "lucide-react";
-import { getProduct, inr } from "@/lib/products";
+import { inr } from "@/lib/products";
+import { useCatalog } from "@/lib/catalog";
 import { SHIPPING_FREE_ABOVE, useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
 export function CartLines({ compact }: { compact?: boolean }) {
   const { cart, setQty, remove, wishlist, toggleWish } = useStore();
+  const { get: getProduct } = useCatalog();
   return (
     <ul className="divide-y divide-border">
       {cart.map((it) => {
         const p = getProduct(it.slug);
-        const v = p?.variants.find((x) => x.label === it.variant);
+        const v = p?.variants.find((x: { label: string }) => x.label === it.variant);
         if (!p || !v) return null;
         const wished = wishlist.includes(p.slug);
         return (

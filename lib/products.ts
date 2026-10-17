@@ -20,6 +20,15 @@ export const DEFAULT_DELIVERY_OPTIONS: DeliveryOption[] = [
 export const etaLabel = (days: number) =>
   days <= 0 ? "Same day" : days === 1 ? "Next day" : `${days}–${days + 2} days`;
 
+/** Product ki poori gallery (images + fallback on single image). */
+export const galleryOf = (p?: { image: string; images?: string[] }): string[] => {
+  if (!p) return [];
+  const list = (p.images ?? []).filter(Boolean);
+  const all = list.length ? list : [p.image];
+  // primary image hamesha pehli rahe
+  return all.includes(p.image) ? [p.image, ...all.filter((i) => i !== p.image)] : all;
+};
+
 /** Product ka enabled delivery options (missing ho to defaults). */
 export const optionsOf = (p?: { deliveryOptions?: DeliveryOption[] }): DeliveryOption[] => {
   const own = p?.deliveryOptions?.filter((o) => o && o.enabled);
@@ -32,6 +41,7 @@ export type Product = {
   category: string;
   group: "dry-fruits" | "nuts-seeds" | "dates-figs" | "gift-hampers";
   image: string;
+  images?: string[]; // gallery — pehli image primary hoti hai
   rating: number;
   reviews: number;
   badge?: "Best Seller" | "New Arrival";

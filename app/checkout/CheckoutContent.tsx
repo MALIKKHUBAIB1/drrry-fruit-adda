@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { Banknote, CheckCircle2, Lock, MapPin, QrCode, ShoppingBag, Truck } from "lucide-react";
-import { getProduct, inr } from "@/lib/products";
+import { inr } from "@/lib/products";
+import { useCatalog } from "@/lib/catalog";
 import { useStore } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
 import { FreeShippingBar, Summary } from "@/components/site/CartSummary";
@@ -85,6 +86,7 @@ function Steps({ step }: { step: number }) {
 }
 
 export default function CheckoutContent() {
+  const { get: getProduct } = useCatalog();
   const { cart, clear, subtotal, discount, shipping, total, coupon } = useStore();
   const { user } = useAuth();
   const [pay, setPay] = useState("cod");

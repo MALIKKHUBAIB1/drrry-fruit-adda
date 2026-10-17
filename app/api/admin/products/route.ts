@@ -12,6 +12,9 @@ function validateProduct(body: Record<string, unknown>, isNew: boolean) {
   const category = cleanText(body.category, 40);
   const group = cleanText(body.group, 20);
   const image = cleanText(body.image, 500) || "/images/mixed.jpg";
+  const images = Array.isArray(body.images)
+    ? body.images.map((i) => cleanText(i, 500)).filter(Boolean).slice(0, 8)
+    : [];
   const rating = toFloat(body.rating, 0, 5);
   const reviews = toInt(body.reviews, 0, 100000);
   const badge = body.badge === "Best Seller" || body.badge === "New Arrival" ? body.badge : undefined;
@@ -60,7 +63,7 @@ function validateProduct(body: Record<string, unknown>, isNew: boolean) {
   if (description.length < 10) return { error: "Description must be at least 10 characters." };
   if (variants.length === 0) return { error: "At least one pack size with price and MRP is required." };
   return {
-    data: { slug, name, category, group, image, rating, reviews, badge, inStock, description, highlights, variants, deliveryOptions, metaTitle, metaDescription },
+    data: { slug, name, category, group, image, images, rating, reviews, badge, inStock, description, highlights, variants, deliveryOptions, metaTitle, metaDescription },
   };
 }
 

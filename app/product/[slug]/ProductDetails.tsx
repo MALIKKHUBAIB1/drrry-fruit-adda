@@ -4,19 +4,20 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Check, Heart, Minus, Plus, Star, Truck } from "lucide-react";
 import { useState } from "react";
-import { inr, products, type Product } from "@/lib/products";
+import { galleryOf, inr, type Product } from "@/lib/products";
 import { useStore } from "@/lib/store";
 import { ProductCard } from "@/components/site/ProductCard";
 import { ReviewsSection } from "@/components/site/Reviews";
 import { cn } from "@/lib/utils";
 
-export function ProductDetails({ p }: { p: Product }) {
+export function ProductDetails({ p, related = [] }: { p: Product; related?: Product[] }) {
   const { add, wishlist, toggleWish } = useStore();
   const router = useRouter();
   const [vi, setVi] = useState(0);
   const [qty, setQty] = useState(1);
+  const gallery = galleryOf(p);
+  const [active, setActive] = useState(0);
   const v = p.variants[vi];
-  const related = products.filter((x) => x.slug !== p.slug && (x.group === p.group || x.category === p.category)).slice(0, 4);
 
   if (!v) return null;
 
@@ -24,8 +25,33 @@ export function ProductDetails({ p }: { p: Product }) {
     <div className="mx-auto max-w-7xl px-4 py-10">
       <nav className="text-xs text-muted-foreground"><Link href="/">Home</Link> / <Link href="/shop">Shop</Link> / {p.name}</nav>
       <div className="mt-6 grid gap-10 lg:grid-cols-2">
-        <div className="overflow-hidden rounded-lg border border-gold/30 bg-muted">
-          <img src={p.image} alt={p.name} width={816} height={816} className="aspect-square w-full object-cover" />
+        <div>
+          <div className="overflow-hidden rounded-lg border border-gold/30 bg-muted">
+            <img
+              src={gallery[active]}
+              alt={`${p.name} — image ${active + 1}`}
+              width={816}
+              height={816}
+              className="aspect-square w-full object-cover"
+            />
+          </div>
+          {gallery.length > 1 && (
+            <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+              {gallery.map((src, i) => (
+                <button
+                  key={src + i}
+                  onClick={() => setActive(i)}
+                  aria-label={`Show image ${i + 1}`}
+                  className={cn(
+                    "h-20 w-20 shrink-0 overflow-hidden rounded-lg border-2 transition",
+                    i === active ? "border-primary" : "border-border opacity-70 hover:opacity-100",
+                  )}
+                >
+                  <img src={src} alt="" className="h-full w-full object-cover" />
+                </button>
+              ))}
+            </div>
+          )}
         </div>
         <div>
           {p.badge && <span className="text-xs uppercase tracking-[0.3em] text-gold">{p.badge}</span>}

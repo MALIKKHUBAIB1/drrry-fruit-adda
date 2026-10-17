@@ -3,10 +3,12 @@
 import Link from "next/link";
 import { Heart, ShoppingBag, Star, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { getProduct, inr, type Product } from "@/lib/products";
+import { inr, type Product } from "@/lib/products";
+import { useCatalog } from "@/lib/catalog";
 import { useStore } from "@/lib/store";
 
 export default function WishlistContent() {
+  const { get: getProduct } = useCatalog();
   const { wishlist, removeWish, clearWishlist, add } = useStore();
   const items = wishlist
     .map((slug) => getProduct(slug))

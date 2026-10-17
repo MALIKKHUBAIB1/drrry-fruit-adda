@@ -609,6 +609,7 @@ type ProductForm = {
   category: string;
   group: string;
   image: string;
+  images: string[];
   rating: string;
   badge: string;
   inStock: boolean;
@@ -629,6 +630,7 @@ const blankForm = (): ProductForm => ({
   category: categories[0]?.slug ?? "almonds",
   group: "dry-fruits",
   image: "/images/mixed.jpg",
+  images: ["/images/mixed.jpg"],
   rating: "4.5",
   badge: "",
   inStock: true,
@@ -652,6 +654,7 @@ const fromProduct = (p: any): ProductForm => ({
   category: p.category,
   group: p.group,
   image: p.image,
+  images: p.images?.length ? [...p.images] : [p.image],
   rating: String(p.rating ?? 4.5),
   badge: p.badge ?? "",
   inStock: p.inStock !== false,
@@ -734,7 +737,8 @@ function ProductsTab({ products, cats, reload }: { products: any[]; cats: any[];
           name: form.name.trim(),
           category: form.category,
           group: form.group,
-          image: form.image.trim() || "/images/mixed.jpg",
+          image: (form.images.find((x) => x.trim()) ?? form.image).trim() || "/images/mixed.jpg",
+          images: form.images.map((x) => x.trim()).filter(Boolean),
           rating: Math.min(5, Math.max(0, Number(form.rating) || 0)),
           badge: form.badge || undefined,
           inStock: form.inStock,
@@ -834,18 +838,90 @@ function ProductsTab({ products, cats, reload }: { products: any[]; cats: any[];
                 ))}
               </select>
             </label>
-            <label className="text-sm font-medium sm:col-span-2">
-              <span className={L}>Image URL</span>
-              <span className="mt-1.5 flex items-center gap-3">
-                <img
-                  src={editor.form.image || "/images/mixed.jpg"}
-                  alt=""
-                  onError={(e) => ((e.target as HTMLImageElement).src = "/images/mixed.jpg")}
-                  className="h-14 w-14 shrink-0 rounded-md border border-border object-cover"
-                />
-                <input value={editor.form.image} onChange={(e) => set({ image: e.target.value })} placeholder="/images/almonds.jpg" className={`${F} font-mono`} />
-              </span>
-            </label>
+            <div className="sm:col-span-2">
+              <span className={L}>Product images (first one is the main image)</span>
+              <div className="mt-1.5 space-y-2">
+                {editor.form.images.map((src, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-md border border-border bg-secondary text-[10px] font-semibold text-muted-foreground">
+                      {i + 1}
+                    </span>
+                    <img
+                      src={src || "/images/mixed.jpg"}
+                      alt=""
+                      onError={(e) => ((e.target as HTMLImageElement).src = "/images/mixed.jpg")}
+                      className="h-12 w-12 shrink-0 rounded-md border border-border object-cover"
+                    />
+                    <input
+                      value={src}
+                      onChange={(e) =>
+                        set({ images: editor.form.images.map((x, j) => (j === i ? e.target.value : x)) })
+                      }
+                      placeholder="/images/almonds.jpg"
+                      aria-label={`Image ${i + 1} URL`}
+                      className={`${F} font-mono`}
+                    />
+                    <span className="flex shrink-0 gap-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const imgs = [...editor.form.images];
+                          const t = imgs[i - 1];
+                          imgs[i - 1] = imgs[i];
+                          imgs[i] = t;
+                          set({ images: imgs });
+                        }}
+                        disabled={i === 0}
+                        aria-label="Move up"
+                        title="Move up"
+                        className="rounded-md border border-input px-2 py-2 text-xs disabled:opacity-30"
+                      >
+                        ↑
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const imgs = [...editor.form.images];
+                          const t = imgs[i + 1];
+                          imgs[i + 1] = imgs[i];
+                          imgs[i] = t;
+                          set({ images: imgs });
+                        }}
+                        disabled={i === editor.form.images.length - 1}
+                        aria-label="Move down"
+                        title="Move down"
+                        className="rounded-md border border-input px-2 py-2 text-xs disabled:opacity-30"
+                      >
+                        ↓
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          set({ images: editor.form.images.filter((_, j) => j !== i) })
+                        }
+                        disabled={editor.form.images.length <= 1}
+                        aria-label="Remove image"
+                        title="Remove"
+                        className="rounded-md border border-destructive/40 px-2 py-2 text-xs text-destructive hover:border-destructive disabled:opacity-30"
+                      >
+                        ✕
+                      </button>
+                    </span>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => set({ images: [...editor.form.images, ""] })}
+                  className="text-sm font-medium text-primary hover:underline"
+                >
+                  + Add another image
+                </button>
+              </div>
+              <p className="mt-1.5 text-xs text-muted-foreground">
+                Available files: /images/almonds.jpg, cashews.jpg, pistachios.jpg, walnuts.jpg,
+                dates.jpg, figs.jpg, raisins.jpg, mixed.jpg, seeds.jpg, gift.jpg
+              </p>
+            </div>
             <label className="text-sm font-medium">
               <span className={L}>Rating (0–5)</span>
               <input value={editor.form.rating} onChange={(e) => set({ rating: e.target.value })} type="number" min={0} max={5} step={0.1} className={`${F} mt-1.5`} />

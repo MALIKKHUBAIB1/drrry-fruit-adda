@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
-import { getProduct } from "./products";
+import { useCatalog } from "./catalog";
 
 export type CartItem = { slug: string; variant: string; qty: number };
 
@@ -67,6 +67,7 @@ async function fetchJson(path: string, init?: RequestInit) {
 }
 
 export function StoreProvider({ children }: { children: ReactNode }) {
+  const { get: getProduct } = useCatalog();
   const [cart, setCart] = useState<CartItem[]>([]);
   const [wishlist, setWishlist] = useState<string[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
