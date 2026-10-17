@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { readDb, updateDb, type DbOrder } from "@/lib/server/db";
 import { getSessionUser, newId } from "@/lib/server/auth";
 import { couponStatus } from "@/lib/server/db";
+import { optionsOf } from "@/lib/products";
 import { shippingForPin } from "@/lib/server/pincode";
 import {
   cleanText,
@@ -25,6 +26,7 @@ type OrderBody = {
   pin: string;
   notes?: string;
   payment?: "cod" | "online";
+  deliveryOptionId?: string;
 };
 
 // GET /api/orders — apne orders (login required)
@@ -105,7 +107,42 @@ export async function POST(req: NextRequest) {
       c.usedCount = (c.usedCount ?? 0) + 1;
     }
     const shipping = shippingForPin(pin, subtotal - discount, db.pincodes, db.hiddenPincodes);
-    const total = subtotal - discount + shipping;
+
+    // Delivery option surcharge — cart ke sabhi products me se max (sabse upar wala)
+    const optionId = cleanText(body.deliveryOptionId, 40) || "standard";
+    let optLabel = "Standard Delivery";
+    let optDays = 5;
+    let optSurcharge = 0;
+    if (optionId) {
+      let maxSurcharge = -1;
+      let maxDays = 0;
+      let found = false;
+      for (const line of lines) {
+        const p = db.products.find((x) => x.slug === line.slug);
+        // optionsOf() product ke apne options use karta hai, warna shared defaults
+        const opt = optionsOf(p).find((o) => o.id === optionId);
+        if (opt) {
+          found = true;
+          if (opt.surcharge > maxSurcharge) {
+            maxSurcharge = opt.surcharge;
+            optLabel = opt.label;
+            optDays = opt.days;
+          }
+          // ETA: sabse slow (sabse zyada days)
+          if (opt.days > maxDays) maxDays = opt.days;
+        }
+      }
+      if (found && maxSurcharge >= 0) {
+        optSurcharge = maxSurcharge;
+        optDays = maxDays;
+      } else {
+        optSurcharge = 0;
+        optLabel = "Standard Delivery";
+        optDays = 5;
+      }
+    }
+    const shippingTotal = shipping + optSurcharge;
+    const total = subtotal - discount + shippingTotal;
 
     const o: DbOrder = {
       id: `DFA-${Date.now().toString(36).toUpperCase().slice(-6)}${newId("").slice(-3)}`,
@@ -114,7 +151,7 @@ export async function POST(req: NextRequest) {
       items: lines,
       subtotal,
       discount,
-      shipping,
+      shipping: shippingTotal,
       total,
       coupon,
       name,
@@ -125,6 +162,9 @@ export async function POST(req: NextRequest) {
       pin,
       notes,
       payment,
+      deliveryOptionId: optionId,
+      deliveryLabel: optLabel,
+      deliveryDays: optDays,
       status: "placed",
       createdAt: new Date().toISOString(),
     };

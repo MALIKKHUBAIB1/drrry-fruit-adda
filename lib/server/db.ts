@@ -80,6 +80,9 @@ export type DbOrder = {
   pin: string;
   notes: string;
   payment: "cod" | "online";
+  deliveryOptionId?: string;
+  deliveryLabel?: string;
+  deliveryDays?: number;
   paymentId?: string;
   razorpayOrderId?: string;
   paidAt?: string;

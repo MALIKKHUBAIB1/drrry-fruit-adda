@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Check, Heart, Minus, Plus, Star, Truck } from "lucide-react";
+import { Check, Clock, Heart, Minus, Plus, Star, Truck } from "lucide-react";
 import { useState } from "react";
-import { inr, products, type Product } from "@/lib/products";
+import { etaLabel, inr, optionsOf, products, type Product } from "@/lib/products";
 import { useStore } from "@/lib/store";
 import { ProductCard } from "@/components/site/ProductCard";
 import { ReviewsSection } from "@/components/site/Reviews";
@@ -39,6 +39,26 @@ export function ProductDetails({ p }: { p: Product }) {
             <span className="rounded bg-gold/20 px-2 py-0.5 text-sm font-medium">{Math.round((1 - v.price / v.mrp) * 100)}% off</span>
           </div>
           <p className="text-xs text-muted-foreground">Inclusive of all taxes</p>
+
+            <ul className="mt-4 space-y-2 rounded-lg border border-border bg-card p-4">
+              {optionsOf(p).map((o) => (
+                <li key={o.id} className="flex items-center justify-between gap-3 text-sm">
+                  <span className="flex items-center gap-2">
+                    {o.days <= 0 ? <Clock className="h-4 w-4 text-gold" /> : <Truck className="h-4 w-4 text-gold" />}
+                    <span>
+                      {o.label}
+                      <span className="block text-xs text-muted-foreground">Arrives in {etaLabel(o.days)}</span>
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-xs font-medium text-primary">
+                    {o.surcharge > 0 ? `+${inr(o.surcharge)}` : "Free"}
+                  </span>
+                </li>
+              ))}
+              <li className="pt-1 text-xs text-muted-foreground">
+                Delivery charge shown at checkout based on your PIN code.
+              </li>
+            </ul>
 
           <p className="mt-6 text-muted-foreground">{p.description}</p>
 

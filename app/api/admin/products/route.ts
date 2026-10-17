@@ -35,6 +35,23 @@ function validateProduct(body: Record<string, unknown>, isNew: boolean) {
     : [];
   const metaTitle = cleanText(body.metaTitle, 120) || undefined;
   const metaDescription = cleanText(body.metaDescription, 320) || undefined;
+  const deliveryOptions = Array.isArray(body.deliveryOptions)
+    ? body.deliveryOptions
+        .map((o: unknown) => {
+          const x = (o ?? {}) as Record<string, unknown>;
+          const label = cleanText(x.label, 40);
+          if (!label) return null;
+          return {
+            id: safeSlugLocal(x.id) || safeSlugLocal(label) || `opt-${label.length}${label.charCodeAt(0)}`,
+            label,
+            days: toInt(x.days, 0, 60),
+            surcharge: toInt(x.surcharge, 0, 100000),
+            enabled: x.enabled !== false,
+          };
+        })
+        .filter((o): o is NonNullable<typeof o> => !!o)
+        .slice(0, 5)
+    : [];
 
   if (isNew && !slug) return { error: "slug is required (e.g. premium-almonds)." };
   if (name.length < 3) return { error: "Product name is required." };
@@ -43,7 +60,7 @@ function validateProduct(body: Record<string, unknown>, isNew: boolean) {
   if (description.length < 10) return { error: "Description must be at least 10 characters." };
   if (variants.length === 0) return { error: "At least one pack size with price and MRP is required." };
   return {
-    data: { slug, name, category, group, image, rating, reviews, badge, inStock, description, highlights, variants, metaTitle, metaDescription },
+    data: { slug, name, category, group, image, rating, reviews, badge, inStock, description, highlights, variants, deliveryOptions, metaTitle, metaDescription },
   };
 }
 

@@ -1,4 +1,29 @@
 export type Variant = { label: string; price: number; mrp: number };
+
+// Delivery option — har product me 1..3 options
+export type DeliveryOption = {
+  id: string;
+  label: string;
+  days: number; // 0 = same day
+  surcharge: number; // extra charge on top of zone shipping
+  enabled: boolean;
+};
+
+export const DEFAULT_DELIVERY_OPTIONS: DeliveryOption[] = [
+  { id: "standard", label: "Standard Delivery", days: 5, surcharge: 0, enabled: true },
+  { id: "express", label: "Express Delivery", days: 2, surcharge: 60, enabled: true },
+  { id: "sameday", label: "Same-Day Delivery", days: 0, surcharge: 150, enabled: true },
+];
+
+export const etaLabel = (days: number) =>
+  days <= 0 ? "Same day" : days === 1 ? "Next day" : `${days}–${days + 2} days`;
+
+/** Product ka enabled delivery options (missing ho to defaults). */
+export const optionsOf = (p?: { deliveryOptions?: DeliveryOption[] }): DeliveryOption[] => {
+  const own = p?.deliveryOptions?.filter((o) => o && o.enabled);
+  return own && own.length ? own : DEFAULT_DELIVERY_OPTIONS;
+};
+
 export type Product = {
   slug: string;
   name: string;
@@ -12,6 +37,7 @@ export type Product = {
   description: string;
   highlights: string[];
   variants: Variant[];
+  deliveryOptions?: DeliveryOption[];
   added: number;
   metaTitle?: string;
   metaDescription?: string;

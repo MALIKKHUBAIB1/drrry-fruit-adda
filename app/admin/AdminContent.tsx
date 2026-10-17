@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { ShieldAlert } from "lucide-react";
 import { useAuth } from "@/lib/auth";
-import { categories, inr } from "@/lib/products";
+import { categories, inr, DEFAULT_DELIVERY_OPTIONS, etaLabel } from "@/lib/products";
 import { cn } from "@/lib/utils";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, PieChart, Pie, Cell, Legend, LineChart, Line } from "recharts";
 
@@ -428,6 +428,7 @@ function OrdersTab({ orders, reload }: { orders: any[]; reload: () => void }) {
 }
 
 type VariantForm = { label: string; price: string; mrp: string };
+type DeliveryForm = { id: string; label: string; days: string; surcharge: string; enabled: boolean };
 type ProductForm = {
   slug: string;
   name: string;
@@ -440,6 +441,7 @@ type ProductForm = {
   description: string;
   highlights: string[];
   variants: VariantForm[];
+  deliveryOptions: DeliveryForm[];
   metaTitle: string;
   metaDescription: string;
 };
@@ -459,6 +461,13 @@ const blankForm = (): ProductForm => ({
   description: "",
   highlights: [""],
   variants: [{ label: "250 g", price: "", mrp: "" }],
+  deliveryOptions: DEFAULT_DELIVERY_OPTIONS.map((o) => ({
+    id: o.id,
+    label: o.label,
+    days: String(o.days),
+    surcharge: String(o.surcharge),
+    enabled: o.enabled,
+  })),
   metaTitle: "",
   metaDescription: "",
 });
@@ -477,6 +486,15 @@ const fromProduct = (p: any): ProductForm => ({
   variants: p.variants?.length
     ? p.variants.map((v: any) => ({ label: v.label, price: String(v.price), mrp: String(v.mrp) }))
     : [{ label: "250 g", price: "", mrp: "" }],
+  deliveryOptions: (p.deliveryOptions?.length ? p.deliveryOptions : DEFAULT_DELIVERY_OPTIONS).map(
+    (o: any) => ({
+      id: o.id,
+      label: o.label,
+      days: String(o.days ?? 5),
+      surcharge: String(o.surcharge ?? 0),
+      enabled: o.enabled !== false,
+    }),
+  ),
   metaTitle: p.metaTitle ?? "",
   metaDescription: p.metaDescription ?? "",
 });
@@ -548,6 +566,15 @@ function ProductsTab({ products, cats, reload }: { products: any[]; cats: any[];
           description: form.description.trim(),
           highlights: form.highlights.map((h) => h.trim()).filter(Boolean),
           variants,
+          deliveryOptions: form.deliveryOptions
+            .filter((o) => o.label.trim())
+            .map((o) => ({
+              id: o.id || slugify(o.label) || `opt-${Math.random().toString(36).slice(2, 7)}`,
+              label: o.label.trim(),
+              days: Math.max(0, Math.min(30, Number(o.days) || 0)),
+              surcharge: Math.max(0, Math.min(100000, Number(o.surcharge) || 0)),
+              enabled: o.enabled,
+            })),
           metaTitle: form.metaTitle.trim(),
           metaDescription: form.metaDescription.trim(),
         }),
@@ -745,6 +772,73 @@ function ProductsTab({ products, cats, reload }: { products: any[]; cats: any[];
               })}
               <button type="button" onClick={() => set({ variants: [...editor.form.variants, { label: "", price: "", mrp: "" }] })} className="text-sm font-medium text-primary hover:underline">
                 + Add pack size
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <p className={L}>Delivery options</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Zone shipping charge ke upar extra surcharge lagta hai. Same-day sirf metro pincodes me suggest hoga.
+            </p>
+            <div className="mt-2 space-y-2">
+              {editor.form.deliveryOptions.map((o, i) => (
+                <div key={i} className="grid grid-cols-[1fr_70px_90px_auto_auto] items-center gap-2">
+                  <input
+                    value={o.label}
+                    onChange={(e) => set({ deliveryOptions: editor.form.deliveryOptions.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)) })}
+                    placeholder="Express Delivery"
+                    aria-label="Delivery option label"
+                    className={F}
+                  />
+                  <input
+                    value={o.days}
+                    onChange={(e) => set({ deliveryOptions: editor.form.deliveryOptions.map((x, j) => (j === i ? { ...x, days: e.target.value } : x)) })}
+                    inputMode="numeric"
+                    placeholder="Days"
+                    aria-label="Delivery days"
+                    title="Days (0 = same day)"
+                    className={F}
+                  />
+                  <input
+                    value={o.surcharge}
+                    onChange={(e) => set({ deliveryOptions: editor.form.deliveryOptions.map((x, j) => (j === i ? { ...x, surcharge: e.target.value } : x)) })}
+                    inputMode="numeric"
+                    placeholder="₹ extra"
+                    aria-label="Surcharge"
+                    title="Extra charge on top of zone shipping"
+                    className={F}
+                  />
+                  <label className="flex items-center gap-1.5 whitespace-nowrap text-xs">
+                    <input
+                      type="checkbox"
+                      checked={o.enabled}
+                      onChange={(e) => set({ deliveryOptions: editor.form.deliveryOptions.map((x, j) => (j === i ? { ...x, enabled: e.target.checked } : x)) })}
+                      className="h-4 w-4 accent-[var(--primary)]"
+                    />
+                    On
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => set({ deliveryOptions: editor.form.deliveryOptions.filter((_, j) => j !== i) })}
+                    disabled={editor.form.deliveryOptions.length <= 1}
+                    aria-label="Remove delivery option"
+                    className="rounded-md border border-input px-2.5 py-2 text-destructive hover:border-destructive disabled:opacity-30"
+                  >
+                    −
+                  </button>
+                  <p className="col-span-5 -mt-1 text-[11px] text-muted-foreground">
+                    Arrives in <b>{etaLabel(Number(o.days) || 0)}</b> ·{" "}
+                    {Number(o.surcharge) > 0 ? `+${inr(Number(o.surcharge))} extra` : "no extra charge"}
+                  </p>
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={() => set({ deliveryOptions: [...editor.form.deliveryOptions, { id: "", label: "", days: "3", surcharge: "0", enabled: true }] })}
+                className="text-sm font-medium text-primary hover:underline"
+              >
+                + Add delivery option
               </button>
             </div>
           </div>

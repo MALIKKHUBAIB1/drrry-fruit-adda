@@ -1,14 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { Banknote, CheckCircle2, Lock, QrCode, ShoppingBag } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Banknote, CheckCircle2, Lock, QrCode, ShoppingBag, Truck } from "lucide-react";
 import { getProduct, inr } from "@/lib/products";
 import { useStore } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
 import { FreeShippingBar, Summary } from "@/components/site/CartSummary";
 import { cn } from "@/lib/utils";
 import { openRazorpayCheckout } from "@/lib/razorpay";
+import { etaLabel, optionsOf, type DeliveryOption } from "@/lib/products";
 
 const field =
   "w-full rounded-md border border-input bg-background px-3 py-2.5 text-sm outline-none focus:border-gold";
@@ -87,6 +88,39 @@ export default function CheckoutContent() {
   const { cart, clear, subtotal, discount, shipping, total, coupon } = useStore();
   const { user } = useAuth();
   const [pay, setPay] = useState("cod");
+
+  // Delivery options — cart ke products se combine (per id: max surcharge, max days)
+  const deliveryOptions: DeliveryOption[] = useMemo(() => {
+    const byId = new Map<string, DeliveryOption>();
+    for (const it of cart) {
+      const p = getProduct(it.slug);
+      for (const o of optionsOf(p)) {
+        const cur = byId.get(o.id);
+        if (!cur) byId.set(o.id, { ...o });
+        else {
+          byId.set(o.id, {
+            ...cur,
+            surcharge: Math.max(cur.surcharge, o.surcharge),
+            days: Math.max(cur.days, o.days),
+          });
+        }
+      }
+    }
+    return [...byId.values()].sort((a, b) => a.days - b.days || a.surcharge - b.surcharge);
+  }, [cart]);
+
+  const [deliveryId, setDeliveryId] = useState("standard");
+  useEffect(() => {
+    if (deliveryOptions.length && !deliveryOptions.some((o) => o.id === deliveryId)) {
+      setDeliveryId(deliveryOptions[0].id);
+    }
+  }, [deliveryOptions, deliveryId]);
+
+  const activeOption = deliveryOptions.find((o) => o.id === deliveryId);
+  const zoneShipping = shipping;
+  const optionSurcharge = activeOption?.surcharge ?? 0;
+  const liveShipping = zoneShipping + optionSurcharge;
+  const liveTotal = subtotal - discount + liveShipping;
   const [form, setForm] = useState<Form>(initial);
   const [errors, setErrors] = useState<Partial<Record<keyof Form, string>>>({});
   const [orderId, setOrderId] = useState<string | null>(null);
@@ -335,7 +369,7 @@ export default function CheckoutContent() {
                   headers: { "Content-Type": "application/json" },
                   credentials: "include",
                   body: JSON.stringify({
-                    amount: Math.round(total * 100),
+                    amount: Math.round(liveTotal * 100),
                     receipt: `DFA-${Date.now().toString(36).toUpperCase()}`,
                   }),
                 });
@@ -375,6 +409,7 @@ export default function CheckoutContent() {
                   state: form.state,
                   pin: form.pin,
                   notes: form.notes,
+                  deliveryOptionId: deliveryId,
                   payment: pay,
                 }),
               });
@@ -590,6 +625,62 @@ export default function CheckoutContent() {
           </fieldset>
 
           <fieldset className="rounded-xl border border-border bg-card p-5 sm:p-6">
+            <legend className="px-1 text-xl font-semibold">Delivery speed</legend>
+            <div className="space-y-2">
+              {deliveryOptions.map((o) => {
+                const active = o.id === deliveryId;
+                return (
+                  <label
+                    key={o.id}
+                    className={cn(
+                      "flex cursor-pointer items-center gap-3 rounded-lg border p-4 transition",
+                      active ? "border-primary bg-primary/5" : "border-input hover:border-gold",
+                    )}
+                  >
+                    <input
+                      type="radio"
+                      name="delivery"
+                      checked={active}
+                      onChange={() => setDeliveryId(o.id)}
+                      className="accent-[var(--primary)]"
+                    />
+                    <Truck className="h-5 w-5 text-gold" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-medium">{o.label}</span>
+                      <span className="block text-xs text-muted-foreground">
+                        Arrives in {etaLabel(o.days)}
+                        {o.surcharge > 0
+                          ? ` · +${inr(o.surcharge)} extra`
+                          : " · no extra charge"}
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-right">
+                      <span className="block text-sm font-semibold text-primary">
+                        {zoneShipping === 0 && o.surcharge === 0
+                          ? "Free"
+                          : inr(zoneShipping + o.surcharge)}
+                      </span>
+                      {zoneShipping > 0 && o.surcharge > 0 && (
+                        <span className="block text-[11px] text-muted-foreground">
+                          {inr(zoneShipping)} + {inr(o.surcharge)}
+                        </span>
+                      )}
+                    </span>
+                  </label>
+                );
+              })}
+              {deliveryOptions.length === 0 && (
+                <p className="text-sm text-muted-foreground">No delivery options available.</p>
+              )}
+            </div>
+            <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Truck className="h-3.5 w-3.5 text-gold" />
+              Delivery charge includes zone-based shipping for your PIN code
+              {pinInfo ? ` (${pinInfo.zone})` : ""}.
+            </p>
+          </fieldset>
+
+          <fieldset className="rounded-xl border border-border bg-card p-5 sm:p-6">
             <legend className="px-1 text-xl font-semibold">Payment</legend>
             {(
               [
@@ -635,7 +726,7 @@ export default function CheckoutContent() {
           </fieldset>
 
           <button disabled={placing} className="w-full rounded-md bg-primary py-3.5 font-medium text-primary-foreground hover:bg-cocoa disabled:opacity-60">
-            {placing ? "Processing…" : `Place Order · ${inr(total)}`}
+            {placing ? "Processing…" : `Place Order · ${inr(liveTotal)}`}
           </button>
           {placeError && (
             <p role="alert" className="rounded-md border border-destructive/25 bg-destructive/[0.06] px-4 py-2.5 text-center text-sm text-destructive">
@@ -682,8 +773,8 @@ export default function CheckoutContent() {
               </p>
             )}
             <p className="-mt-1 text-xs text-muted-foreground">
-              Subtotal {inr(subtotal)} · Shipping {shipping === 0 ? "Free" : inr(shipping)} · Total{" "}
-              {inr(total)}
+              Subtotal {inr(subtotal)} · Shipping {liveShipping === 0 ? "Free" : inr(liveShipping)} · Total{" "}
+              {inr(liveTotal)}
             </p>
           </Summary>
         </div>
