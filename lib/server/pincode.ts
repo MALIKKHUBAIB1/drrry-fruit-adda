@@ -69,7 +69,7 @@ export type PinRow = {
   district: string;
   zone: Zone;
   shipping: number;
-  source: "override" | "dataset" | "india-post";
+  source: "override" | "dataset" | "india-post" | "hidden";
 };
 
 const DATA_FILE = path.join(process.cwd(), "data", "pincodes.json");
@@ -102,14 +102,19 @@ export function listAllPincodes(opts: {
   page?: number;
   limit?: number;
   overrides: DbPincode[];
+  hidden?: string[];
+  includeHidden?: boolean;
 }) {
-  const { q = "", zone = "", page = 1, limit = 50, overrides } = opts;
+  const { q = "", zone = "", page = 1, limit = 50, overrides, hidden = [], includeHidden } = opts;
   const map = loadDataset();
   const ovMap = new Map(overrides.map((o) => [o.pin, o]));
+  const hiddenSet = new Set(hidden);
   const needle = q.trim().toLowerCase();
 
   const all: PinRow[] = [];
   for (const [pin, info] of map) {
+    const isHidden = hiddenSet.has(pin);
+    if (isHidden && !includeHidden) continue;
     const ov = ovMap.get(pin);
     const z: Zone = ov ? ov.zone : zoneFor(pin, info.state);
     if (zone && z !== zone) continue;
@@ -125,7 +130,7 @@ export function listAllPincodes(opts: {
       district: ov?.district || info.district,
       zone: z,
       shipping: ov ? ov.shipping : zoneCharge(z),
-      source: ov ? "override" : "dataset",
+      source: isHidden ? "hidden" : ov ? "override" : "dataset",
     });
   }
 
@@ -160,6 +165,7 @@ export function listAllPincodes(opts: {
 /** DB override → local dataset → India Post live API. */
 export async function lookupPincode(pin: string): Promise<PinRow | null> {
   const db = await readDb();
+  if (db.hiddenPincodes.includes(pin)) return null;
   const ov = db.pincodes.find((p) => p.pin === pin);
   if (ov) {
     return {
@@ -225,11 +231,17 @@ export async function lookupPincode(pin: string): Promise<PinRow | null> {
 }
 
 /** Order time shipping — DB override → dataset zone → default. */
-export function shippingForPin(pin: string, netAmount: number, overrides: DbPincode[]): number {
+export function shippingForPin(
+  pin: string,
+  netAmount: number,
+  overrides: DbPincode[],
+  hidden: string[] = [],
+): number {
   if (netAmount <= 0) return 0;
   if (netAmount >= FREE_SHIPPING_ABOVE) return 0;
   const ov = overrides.find((o) => o.pin === pin);
   if (ov) return ov.shipping;
+  if (hidden.includes(pin)) return 0; // admin ne service se hata diya
   const local = loadDataset().get(pin);
   return zoneCharge(zoneFor(pin, local?.state ?? ""));
 }

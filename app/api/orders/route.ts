@@ -104,7 +104,7 @@ export async function POST(req: NextRequest) {
       coupon = c.code;
       c.usedCount = (c.usedCount ?? 0) + 1;
     }
-    const shipping = shippingForPin(pin, subtotal - discount, db.pincodes);
+    const shipping = shippingForPin(pin, subtotal - discount, db.pincodes, db.hiddenPincodes);
     const total = subtotal - discount + shipping;
 
     const o: DbOrder = {

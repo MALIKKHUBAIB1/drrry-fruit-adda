@@ -21,13 +21,23 @@ export async function GET(req: NextRequest) {
   const zone = cleanText(sp.get("zone") ?? "", 20);
   const page = toInt(sp.get("page") ?? 1, 1, 100000);
   const limit = Math.min(500, Math.max(10, toInt(sp.get("limit") ?? 50, 10, 500)));
+  const includeHidden = sp.get("hidden") === "true";
 
   const db = await readDb();
-  const result = listAllPincodes({ q, zone, page, limit, overrides: db.pincodes });
+  const result = listAllPincodes({
+    q,
+    zone,
+    page,
+    limit,
+    overrides: db.pincodes,
+    hidden: db.hiddenPincodes,
+    includeHidden,
+  });
 
   return NextResponse.json({
     ...result,
     overrides: db.pincodes.length,
+    hiddenCount: db.hiddenPincodes.length,
     totalInDataset: datasetCount(),
     zones: ZONES,
     zoneLabels: ZONE_LABEL,
@@ -79,6 +89,8 @@ export async function POST(req: NextRequest) {
 
   const updated = await updateDb((d) => {
     const i = d.pincodes.findIndex((p) => p.pin === pin);
+    // Custom charge set karne par pincode unhide ho jata hai
+    d.hiddenPincodes = d.hiddenPincodes.filter((p) => p !== pin);
     if (i >= 0) {
       d.pincodes[i] = row;
       return true as const;
@@ -90,18 +102,35 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ pincode: row, updated }, { status: updated ? 200 : 201 });
 }
 
-// DELETE /api/admin/pincodes?pin= — override hatao (dummy zone charge wapas)
+// DELETE /api/admin/pincodes?pin=            → hatao + list se hide
+// DELETE /api/admin/pincodes?pin=&mode=reset → sirf custom charge hatao, pincode rahe
+// Restore ke liye: POST /api/admin/pincodes/restore?pin=
 export async function DELETE(req: NextRequest) {
   const { status } = await requireAdmin(req);
   if (status !== 200) return NextResponse.json({ error: ADMIN_DENIED(status) }, { status });
-  const pin = cleanText(new URL(req.url).searchParams.get("pin") ?? "", 6);
+  const sp = new URL(req.url).searchParams;
+  const pin = cleanText(sp.get("pin") ?? "", 6);
   if (!pin) return NextResponse.json({ error: "pin required." }, { status: 400 });
-  const removed = await updateDb((db) => {
-    const i = db.pincodes.findIndex((p) => p.pin === pin);
-    if (i < 0) return false;
-    db.pincodes.splice(i, 1);
-    return true;
+  const resetOnly = sp.get("mode") === "reset";
+
+  const db = await readDb();
+  const hasOverride = db.pincodes.some((p) => p.pin === pin);
+
+  if (resetOnly) {
+    if (!hasOverride)
+      return NextResponse.json({ error: "No custom charge set for this PIN." }, { status: 404 });
+    await updateDb((d) => {
+      d.pincodes = d.pincodes.filter((p) => p.pin !== pin);
+    });
+    return NextResponse.json({ ok: true, reset: true });
+  }
+
+  const exists = hasOverride || datasetCount() > 0;
+  await updateDb((d) => {
+    d.pincodes = d.pincodes.filter((p) => p.pin !== pin);
+    d.hiddenPincodes = [...new Set([...d.hiddenPincodes, pin])];
   });
-  if (!removed) return NextResponse.json({ error: "No custom override for this PIN." }, { status: 404 });
-  return NextResponse.json({ ok: true });
+
+  if (!exists) return NextResponse.json({ error: "Pincode not found." }, { status: 404 });
+  return NextResponse.json({ ok: true, hidden: true });
 }

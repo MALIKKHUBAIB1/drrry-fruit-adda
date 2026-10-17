@@ -1363,11 +1363,13 @@ function PincodesTab({ reload }: { reload: () => void }) {
   const [total, setTotal] = useState(0);
   const [totalInDataset, setTotalInDataset] = useState(0);
   const [overrides, setOverrides] = useState(0);
+  const [hiddenCount, setHiddenCount] = useState(0);
   const [defaults, setDefaults] = useState<Record<string, number>>({});
   const [zoneLabels, setZoneLabels] = useState<Record<string, string>>({});
   const [freeAbove, setFreeAbove] = useState(999);
   const [q, setQ] = useState("");
   const [zoneF, setZoneF] = useState("");
+  const [showHidden, setShowHidden] = useState(false);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(50);
   const [loading, setLoading] = useState(false);
@@ -1384,6 +1386,7 @@ function PincodesTab({ reload }: { reload: () => void }) {
       const sp = new URLSearchParams();
       if (q) sp.set("q", q);
       if (zoneF) sp.set("zone", zoneF);
+      if (showHidden) sp.set("hidden", "true");
       sp.set("page", String(page));
       sp.set("limit", String(limit));
       const d = await j(`/api/admin/pincodes?${sp.toString()}`);
@@ -1391,6 +1394,7 @@ function PincodesTab({ reload }: { reload: () => void }) {
       setTotal(d.total);
       setTotalInDataset(d.totalInDataset ?? 0);
       setOverrides(d.overrides ?? 0);
+      setHiddenCount(d.hiddenCount ?? 0);
       setDefaults(d.defaultCharges ?? {});
       setZoneLabels(d.zoneLabels ?? {});
       setFreeAbove(d.freeShippingAbove ?? 999);
@@ -1399,7 +1403,7 @@ function PincodesTab({ reload }: { reload: () => void }) {
     } finally {
       setLoading(false);
     }
-  }, [q, zoneF, page, limit]);
+  }, [q, zoneF, page, limit, showHidden]);
 
   useEffect(() => { load().catch(() => {}); }, [load]);
 
@@ -1453,11 +1457,37 @@ function PincodesTab({ reload }: { reload: () => void }) {
   const resetRow = async (pin: string) => {
     if (!confirm(`Remove custom charge for ${pin}? Default zone charge will apply.`)) return;
     try {
-      await j(`/api/admin/pincodes?pin=${pin}`, { method: "DELETE" });
+      await j(`/api/admin/pincodes?pin=${pin}&mode=reset`, { method: "DELETE" });
       await load();
       reload();
     } catch (e) {
       alert(e instanceof Error ? e.message : "Couldn't reset.");
+    }
+  };
+
+  // Poori entry hatao (custom override ya list se hide)
+  const deleteRow = async (pin: string) => {
+    if (!confirm(`Delete pincode ${pin}? It will be removed from the delivery list.`)) return;
+    setErr(null);
+    try {
+      await j(`/api/admin/pincodes?pin=${pin}`, { method: "DELETE" });
+      setForm((f) => (f.pin === pin ? { ...f, pin: "", city: "", state: "", district: "" } : f));
+      await load();
+      reload();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Couldn't delete pincode.");
+    }
+  };
+
+  // Hidden pincode wapas lao
+  const restoreRow = async (pin: string) => {
+    setErr(null);
+    try {
+      await j(`/api/admin/pincodes/restore?pin=${pin}`, { method: "POST" });
+      await load();
+      reload();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Couldn't restore pincode.");
     }
   };
 
@@ -1548,6 +1578,10 @@ function PincodesTab({ reload }: { reload: () => void }) {
         <select value={limit} onChange={(e) => { setLimit(Number(e.target.value)); setPage(1); }} className="rounded-md border border-input bg-background px-3 py-2 text-sm">
           {[50, 100, 200, 500].map((n) => <option key={n} value={n}>{n} / page</option>)}
         </select>
+        <label className="flex items-center gap-2 whitespace-nowrap rounded-md border border-input bg-background px-3 py-2 text-sm">
+          <input type="checkbox" checked={showHidden} onChange={(e) => { setShowHidden(e.target.checked); setPage(1); }} className="h-4 w-4 accent-[var(--primary)]" />
+          Include hidden ({hiddenCount})
+        </label>
       </div>
 
       <p className="text-xs text-muted-foreground">
@@ -1586,14 +1620,51 @@ function PincodesTab({ reload }: { reload: () => void }) {
                       : r.zone === "remote" ? "bg-destructive/10 text-destructive"
                       : "bg-gold/15 text-cocoa",
                     )}>{r.zone}</span>
+                    {r.source === "override" && (
+                      <span className="ml-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">custom</span>
+                    )}
+                    {r.source === "hidden" && (
+                      <span className="ml-1 rounded-full bg-border px-2 py-0.5 text-[11px] font-medium text-muted-foreground">hidden</span>
+                    )}
                   </td>
                   <td className="px-3 py-2 text-right font-semibold text-primary">₹{r.shipping}</td>
                   <td className="px-3 py-2 text-right">
-                    <span className="mr-2 inline-flex items-center gap-1.5">
-                      <button onClick={() => editRow(r)} className="rounded border border-input px-2 py-0.5 text-xs hover:border-gold">Edit</button>
-                      {r.source === "override" && (
-                        <button onClick={() => resetRow(r.pin)} className="text-xs text-muted-foreground hover:text-destructive">Reset</button>
+                    <span className="inline-flex items-center justify-end gap-1.5">
+                      {r.source === "hidden" ? (
+                        <button
+                          onClick={() => restoreRow(r.pin)}
+                          title="Restore this pincode"
+                          className="rounded border border-primary px-2 py-0.5 text-xs font-medium text-primary hover:bg-primary hover:text-white"
+                        >
+                          Restore
+                        </button>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => editRow(r)}
+                            className="rounded border border-input px-2 py-0.5 text-xs hover:border-gold"
+                          >
+                            Edit
+                          </button>
+                          {r.source === "override" && (
+                            <button
+                              onClick={() => resetRow(r.pin)}
+                              title="Remove custom charge, apply default zone charge"
+                              className="rounded border border-input px-2 py-0.5 text-xs text-muted-foreground hover:border-gold"
+                            >
+                              Reset
+                            </button>
+                          )}
+                        </>
                       )}
+                      <button
+                        onClick={() => deleteRow(r.pin)}
+                        aria-label={`Delete ${r.pin}`}
+                        title="Delete from delivery list"
+                        className="rounded border border-destructive/40 px-2 py-0.5 text-xs text-destructive hover:bg-destructive hover:text-white"
+                      >
+                        Delete
+                      </button>
                     </span>
                   </td>
                 </tr>

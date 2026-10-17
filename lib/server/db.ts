@@ -185,6 +185,7 @@ export type DbShape = {
   hampers: DbHamper[];
   coupons: DbCoupon[];
   pincodes: DbPincode[];
+  hiddenPincodes: string[];
   settings: DbSettings;
   orders: DbOrder[];
   contacts: DbContact[];
@@ -369,6 +370,7 @@ function seed(): DbShape {
     hampers: seedHampers(),
     settings: seedSettings(),
     pincodes: seedPincodes(),
+    hiddenPincodes: [],
     coupons: [
       {
         code: "WELCOME10",
@@ -443,6 +445,7 @@ function normalize(db: Partial<DbShape>): DbShape {
     })(),
     settings: db.settings ?? s.settings,
     pincodes: db.pincodes ?? s.pincodes,
+    hiddenPincodes: db.hiddenPincodes ?? [],
     coupons: db.coupons ?? s.coupons,
     orders: db.orders ?? [],
     contacts: db.contacts ?? [],
