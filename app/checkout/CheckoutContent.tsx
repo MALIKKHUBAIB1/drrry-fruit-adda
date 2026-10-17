@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { Banknote, CheckCircle2, Lock, QrCode, ShoppingBag, Truck } from "lucide-react";
+import { Banknote, CheckCircle2, Lock, MapPin, QrCode, ShoppingBag, Truck } from "lucide-react";
 import { getProduct, inr } from "@/lib/products";
 import { useStore } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
@@ -491,6 +491,68 @@ export default function CheckoutContent() {
               </div>
             </div>
           )}
+          {/* Check delivery */}
+          <div className="rounded-xl border border-gold/30 bg-card p-5">
+            <p className="flex items-center gap-2 text-sm font-medium">
+              <Truck className="h-4 w-4 text-gold" /> Check delivery
+            </p>
+            <div className="mt-2 flex gap-2">
+              <input
+                value={form.pin}
+                onChange={(e) => {
+                  const v = e.target.value.replace(/\D/g, "").slice(0, 6);
+                  setForm((f) => ({ ...f, pin: v }));
+                  setErrors((prev) => ({ ...prev, pin: undefined }));
+                  setPinInfo(null);
+                  setPinErr(null);
+                }}
+                inputMode="numeric"
+                maxLength={6}
+                placeholder="Enter 6-digit PIN code"
+                aria-label="PIN code for delivery check"
+                className="min-w-0 flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm"
+              />
+              <button
+                type="button"
+                onClick={() => checkPin(form.pin)}
+                disabled={pinLoading || !/^[1-9]\d{5}$/.test(form.pin)}
+                className="shrink-0 rounded-md border border-primary px-5 text-sm font-medium text-primary hover:bg-primary hover:text-primary-foreground disabled:opacity-50"
+              >
+                {pinLoading ? "Checking…" : "Check"}
+              </button>
+            </div>
+
+            {pinErr && (
+              <p role="alert" className="mt-2 text-xs text-destructive">{pinErr}</p>
+            )}
+            {pinInfo && (
+              <div className="mt-3 rounded-lg border border-border bg-secondary/50 p-3 text-sm">
+                <p className="flex items-center gap-2 font-medium text-primary">
+                  <MapPin className="h-4 w-4" />
+                  {pinInfo.city}
+                  {pinInfo.district ? `, ${pinInfo.district}` : ""}, {pinInfo.state}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {pinInfo.serviceable
+                    ? `Delivery available in ${pinInfo.zone} zone`
+                    : "This PIN code is currently not serviceable."}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Delivery charge:{" "}
+                  <b className="text-foreground">
+                    {zoneShipping === 0 ? "FREE" : inr(zoneShipping)}
+                  </b>
+                  {subtotal - discount < FREE_SHIPPING_ABOVE && (
+                    <> · add {inr(FREE_SHIPPING_ABOVE - (subtotal - discount))} more for free shipping</>
+                  )}
+                </p>
+                <p className="mt-2 text-xs font-medium text-primary">
+                  City and state filled automatically — please check below.
+                </p>
+              </div>
+            )}
+          </div>
+
           <fieldset className="grid gap-4 rounded-xl border border-border bg-card p-5 sm:grid-cols-2 sm:p-6">
             <legend className="px-1 text-xl font-semibold">Contact</legend>
             <label className="text-sm">

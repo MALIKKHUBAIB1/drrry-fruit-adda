@@ -15,8 +15,6 @@ export function ProductDetails({ p }: { p: Product }) {
   const router = useRouter();
   const [vi, setVi] = useState(0);
   const [qty, setQty] = useState(1);
-  const [pin, setPin] = useState("");
-  const [pinMsg, setPinMsg] = useState("");
   const v = p.variants[vi];
   const related = products.filter((x) => x.slug !== p.slug && (x.group === p.group || x.category === p.category)).slice(0, 4);
 
@@ -61,14 +59,6 @@ export function ProductDetails({ p }: { p: Product }) {
           <button disabled={!p.inStock} onClick={() => { add(p.slug, v.label, qty); router.push("/checkout"); }} className="mt-3 w-full rounded-md bg-gold py-3 font-medium text-cocoa hover:brightness-105 disabled:opacity-50">Buy Now</button>
           <p className={cn("mt-3 text-sm", p.inStock ? "text-primary" : "text-destructive")}>{p.inStock ? "● In stock" : "● Currently out of stock"}</p>
 
-          <form onSubmit={(e) => { e.preventDefault(); setPinMsg(/^[1-9]\d{5}$/.test(pin) ? "Delivery usually takes 3–7 working days to this PIN code." : "Please enter a valid 6-digit PIN code."); }} className="mt-6 rounded-lg border border-border p-4">
-            <p className="flex items-center gap-2 text-sm font-medium"><Truck className="h-4 w-4 text-gold" /> Check delivery</p>
-            <div className="mt-2 flex gap-2">
-              <input value={pin} onChange={(e) => setPin(e.target.value)} inputMode="numeric" maxLength={6} placeholder="Enter PIN code" className="min-w-0 flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm" />
-              <button className="rounded-md border border-primary px-4 text-sm text-primary">Check</button>
-            </div>
-            {pinMsg && <p className="mt-2 text-xs text-muted-foreground">{pinMsg}</p>}
-          </form>
 
           <ul className="mt-6 space-y-2">
             {p.highlights.map((h) => <li key={h} className="flex items-center gap-2 text-sm"><Check className="h-4 w-4 text-gold" />{h}</li>)}
