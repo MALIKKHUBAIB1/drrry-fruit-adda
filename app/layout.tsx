@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { readDb } from "@/lib/server/db";
 import "./globals.css";
 import { Providers } from "@/components/site/Providers";
 import { Chrome } from "@/components/site/Chrome";
@@ -66,7 +67,11 @@ const siteJsonLd = {
   },
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // Ticker messages DB se — SSR me hi sahi render ho, phir bhi client refresh rehta hai
+  const db = await readDb();
+  const announcements = db.settings.announcements ?? [];
+
   return (
     <html lang="en">
       <head>
@@ -81,7 +86,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body>
         <Providers>
-          <Chrome>{children}</Chrome>
+          <Chrome announcements={announcements}>{children}</Chrome>
         </Providers>
       </body>
     </html>

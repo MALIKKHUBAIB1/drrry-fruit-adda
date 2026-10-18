@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { useSettings } from "@/lib/catalog";
 import { Check, Copy, Gift, Timer } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -32,15 +33,9 @@ function useCountdown(target: string) {
 }
 
 export function PromoBanner() {
-  const [promo, setPromo] = useState<Promo | null>(null);
+  // Promo shared context se — duplicate fetch hata diya
+  const promo = useSettings().promo;
   const [copied, setCopied] = useState(false);
-
-  useEffect(() => {
-    fetch("/api/settings", { credentials: "include" })
-      .then((r) => r.json())
-      .then((d) => setPromo(d.settings?.promo ?? null))
-      .catch(() => {});
-  }, []);
 
   const cd = useCountdown(promo?.expiresAt ?? "");
 

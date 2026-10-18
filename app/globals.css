@@ -18,6 +18,7 @@
   --color-popover: var(--popover);
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
   --color-primary-foreground: var(--primary-foreground);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
@@ -45,6 +46,7 @@
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.25 0.04 35);
   --primary: oklch(0.37 0.09 35);           /* walnut #6B2F20 */
+  --primary-hover: oklch(0.32 0.085 35);     /* thoda darker walnut — hover */
   --primary-foreground: oklch(0.985 0.018 85);
   --secondary: oklch(0.95 0.03 85);
   --secondary-foreground: oklch(0.3 0.06 35);

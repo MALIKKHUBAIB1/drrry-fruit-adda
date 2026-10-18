@@ -78,7 +78,7 @@ export default function ContactForm({ labelCls, inputCls }: { labelCls: string; 
       )}
       <button
         disabled={busy}
-        className="bg-primary px-10 py-3.5 text-xs font-medium uppercase tracking-[0.25em] text-primary-foreground transition hover:bg-cocoa disabled:opacity-60"
+        className="bg-primary px-10 py-3.5 text-xs font-medium uppercase tracking-[0.25em] text-primary-foreground transition hover:bg-primary-hover disabled:opacity-60"
       >
         {busy ? "Sending…" : "Send Message"}
       </button>

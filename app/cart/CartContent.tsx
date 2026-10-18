@@ -38,7 +38,7 @@ export default function CartContent() {
           <div className="mt-6 flex flex-wrap justify-center gap-2">
             <Link
               href="/shop"
-              className="rounded-md bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground hover:bg-cocoa"
+              className="rounded-md bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary-hover"
             >
               Continue Shopping
             </Link>
@@ -73,7 +73,7 @@ export default function CartContent() {
           <Summary>
             <Link
               href="/checkout"
-              className="block rounded-md bg-primary py-3 text-center font-medium text-primary-foreground hover:bg-cocoa"
+              className="block rounded-md bg-primary py-3 text-center font-medium text-primary-foreground hover:bg-primary-hover"
             >
               Proceed to Checkout →
             </Link>

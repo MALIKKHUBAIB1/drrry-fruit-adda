@@ -39,7 +39,7 @@ type Store = {
   couponError: string | null;
   synced: boolean;
   setCartOpen: (o: boolean) => void;
-  add: (slug: string, variant: string, qty?: number) => void;
+  add: (slug: string, variant: string, qty?: number, openDrawer?: boolean) => void;
   setQty: (slug: string, variant: string, qty: number) => void;
   remove: (slug: string, variant: string) => void;
   clear: () => void;
@@ -185,14 +185,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (ready) localStorage.setItem("dfa-coupon", JSON.stringify(coupon));
   }, [coupon, ready]);
 
-  const add = (slug: string, variant: string, qty = 1) => {
+  // openDrawer: default false — Zomato/BigBasket style instant add.
+  // Cart drawer sirf tab khule jab user explicitly maange (e.g. product page se).
+  const add = (slug: string, variant: string, qty = 1, openDrawer = false) => {
     setCart((c) => {
       const i = c.findIndex((x) => x.slug === slug && x.variant === variant);
       if (i >= 0) return c.map((x, j) => (j === i ? { ...x, qty: x.qty + qty } : x));
       return [...c, { slug, variant, qty }];
     });
-    toast.success(`${getProduct(slug)?.name} added to cart`);
-    setCartOpen(true);
+    const name = getProduct(slug)?.name ?? "Item";
+    toast.success(`${name} added to cart`, {
+      description: qty > 1 ? `Qty ${qty} · ${variant}` : variant,
+      action: {
+        label: "View cart",
+        onClick: () => setCartOpen(true),
+      },
+    });
+    if (openDrawer) setCartOpen(true);
   };
   const setQty = (slug: string, variant: string, qty: number) =>
     setCart((c) =>

@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { ShieldAlert } from "lucide-react";
+import { Plus, ShieldAlert, Trash2 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
+import { bustCache } from "@/lib/apiCache";
 import { categories, inr, DEFAULT_DELIVERY_OPTIONS, etaLabel } from "@/lib/products";
 import { cn } from "@/lib/utils";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, PieChart, Pie, Cell, Legend, LineChart, Line } from "recharts";
@@ -30,6 +31,7 @@ export default function AdminContent() {
   const [cats, setCats] = useState<any[]>([]);
   const [hampers, setHampers] = useState<any[]>([]);
   const [promo, setPromo] = useState<any>(null);
+  const [announcements, setAnnouncements] = useState<string[]>([]);
   const [coupons, setCoupons] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [contacts, setContacts] = useState<any[]>([]);
@@ -38,6 +40,8 @@ export default function AdminContent() {
   const [err, setErr] = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    // Admin kuch bhi change karta hai to public cache stale ho jaata hai — turant clear
+    bustCache();
     setErr(null);
     try {
       const [s, o, p, cg, hg, pg, c, u, m, n, r] = await Promise.all([
@@ -59,6 +63,7 @@ export default function AdminContent() {
       setCats(cg.categories);
       setHampers(hg.hampers);
       setPromo(pg.settings?.promo ?? null);
+      setAnnouncements(pg.settings?.announcements ?? []);
       setCoupons(c.coupons);
       setUsers(u.users);
       setContacts(m.contacts);
@@ -129,7 +134,9 @@ export default function AdminContent() {
         {tab === "Products" && <ProductsTab products={products} cats={cats} reload={load} />}
         {tab === "Categories" && <CategoriesTab cats={cats} reload={load} />}
         {tab === "Gift Hampers" && <HampersTab hampers={hampers} reload={load} />}
-        {tab === "Promo Banner" && <PromoTab promo={promo} reload={load} />}
+        {tab === "Promo Banner" && (
+          <PromoTab promo={promo} announcements={announcements} reload={load} />
+        )}
         {tab === "Pincodes" && <PincodesTab reload={load} />}
         {tab === "Coupons" && <CouponsTab coupons={coupons} reload={load} />}
         {tab === "Users" && <UsersTab users={users} reload={load} />}
@@ -572,7 +579,7 @@ function OrdersTab({ orders, reload }: { orders: any[]; reload: () => void }) {
                   <button
                     onClick={() => save(o)}
                     disabled={saving === o.id}
-                    className="rounded-md bg-primary px-5 py-2 text-sm font-medium text-primary-foreground hover:bg-cocoa disabled:opacity-60"
+                    className="rounded-md bg-primary px-5 py-2 text-sm font-medium text-primary-foreground hover:bg-primary-hover disabled:opacity-60"
                   >
                     {saving === o.id ? "Saving…" : "Save & notify customer"}
                   </button>
@@ -615,6 +622,8 @@ type ProductForm = {
   inStock: boolean;
   description: string;
   highlights: string[];
+  specs: { label: string; value: string }[];
+  faq: { q: string; a: string }[];
   variants: VariantForm[];
   deliveryOptions: DeliveryForm[];
   metaTitle: string;
@@ -636,6 +645,8 @@ const blankForm = (): ProductForm => ({
   inStock: true,
   description: "",
   highlights: [""],
+  specs: [],
+  faq: [],
   variants: [{ label: "250 g", price: "", mrp: "" }],
   deliveryOptions: DEFAULT_DELIVERY_OPTIONS.map((o) => ({
     id: o.id,
@@ -660,6 +671,8 @@ const fromProduct = (p: any): ProductForm => ({
   inStock: p.inStock !== false,
   description: p.description ?? "",
   highlights: p.highlights?.length ? [...p.highlights] : [""],
+  specs: p.specs?.length ? p.specs.map((x: any) => ({ label: x.label, value: x.value })) : [],
+  faq: p.faq?.length ? p.faq.map((x: any) => ({ q: x.q, a: x.a })) : [],
   variants: p.variants?.length
     ? p.variants.map((v: any) => ({ label: v.label, price: String(v.price), mrp: String(v.mrp) }))
     : [{ label: "250 g", price: "", mrp: "" }],
@@ -744,6 +757,8 @@ function ProductsTab({ products, cats, reload }: { products: any[]; cats: any[];
           inStock: form.inStock,
           description: form.description.trim(),
           highlights: form.highlights.map((h) => h.trim()).filter(Boolean),
+          specs: form.specs.filter((x) => x.label.trim() && x.value.trim()),
+          faq: form.faq.filter((x) => x.q.trim() && x.a.trim()),
           variants,
           deliveryOptions: form.deliveryOptions
             .filter((o) => o.label.trim())
@@ -788,7 +803,7 @@ function ProductsTab({ products, cats, reload }: { products: any[]; cats: any[];
     <div className="space-y-4">
       <div className="flex flex-wrap gap-2">
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search products…" className="min-w-0 flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm" />
-        <button onClick={openNew} className="rounded-md bg-primary px-5 py-2 text-sm font-medium text-primary-foreground hover:bg-cocoa">
+        <button onClick={openNew} className="rounded-md bg-primary px-5 py-2 text-sm font-medium text-primary-foreground hover:bg-primary-hover">
           + Add product
         </button>
       </div>
@@ -1001,6 +1016,113 @@ function ProductsTab({ products, cats, reload }: { products: any[]; cats: any[];
           </div>
 
           <div>
+            <p className={L}>Specifications</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Product page par Amazon-style table banega. Max 20 rows.
+            </p>
+            <div className="mt-2 space-y-2">
+              {editor.form.specs.map((row, i) => (
+                <span key={i} className="flex gap-2">
+                  <input
+                    value={row.label}
+                    onChange={(e) =>
+                      set({
+                        specs: editor.form.specs.map((x, j) =>
+                          j === i ? { ...x, label: e.target.value } : x,
+                        ),
+                      })
+                    }
+                    placeholder="Label (e.g. Net Weight)"
+                    className={`${F} sm:max-w-[45%]`}
+                  />
+                  <input
+                    value={row.value}
+                    onChange={(e) =>
+                      set({
+                        specs: editor.form.specs.map((x, j) =>
+                          j === i ? { ...x, value: e.target.value } : x,
+                        ),
+                      })
+                    }
+                    placeholder="Value (e.g. 250 g, 500 g, 1 kg)"
+                    className={F}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => set({ specs: editor.form.specs.filter((_, j) => j !== i) })}
+                    aria-label={`Remove specification ${i + 1}`}
+                    className="shrink-0 rounded-md border border-input px-3 text-destructive hover:border-destructive"
+                  >
+                    −
+                  </button>
+                </span>
+              ))}
+              <button
+                type="button"
+                onClick={() => set({ specs: [...editor.form.specs, { label: "", value: "" }] })}
+                className="text-sm font-medium text-primary hover:underline"
+              >
+                + Add specification
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <p className={L}>FAQ</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Product page ke FAQ tab me accordion ke roop me dikhega. Max 15.
+            </p>
+            <div className="mt-2 space-y-3">
+              {editor.form.faq.map((row, i) => (
+                <div key={i} className="rounded-lg border border-input p-3">
+                  <div className="flex gap-2">
+                    <input
+                      value={row.q}
+                      onChange={(e) =>
+                        set({
+                          faq: editor.form.faq.map((x, j) =>
+                            j === i ? { ...x, q: e.target.value } : x,
+                          ),
+                        })
+                      }
+                      placeholder={`Question ${i + 1}`}
+                      className={F}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => set({ faq: editor.form.faq.filter((_, j) => j !== i) })}
+                      aria-label={`Remove FAQ ${i + 1}`}
+                      className="shrink-0 rounded-md border border-input px-3 text-destructive hover:border-destructive"
+                    >
+                      −
+                    </button>
+                  </div>
+                  <textarea
+                    value={row.a}
+                    onChange={(e) =>
+                      set({
+                        faq: editor.form.faq.map((x, j) =>
+                          j === i ? { ...x, a: e.target.value } : x,
+                        ),
+                      })
+                    }
+                    rows={2}
+                    placeholder="Answer"
+                    className={`${F} mt-2`}
+                  />
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={() => set({ faq: [...editor.form.faq, { q: "", a: "" }] })}
+                className="text-sm font-medium text-primary hover:underline"
+              >
+                + Add FAQ
+              </button>
+            </div>
+          </div>
+
+          <div>
             <p className={L}>Pack sizes & prices *</p>
             <div className="mt-1.5 space-y-2">
               {editor.form.variants.map((v, i) => {
@@ -1100,7 +1222,7 @@ function ProductsTab({ products, cats, reload }: { products: any[]; cats: any[];
             </p>
           )}
           <div className="flex flex-wrap gap-2">
-            <button disabled={busy} className="rounded-md bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground hover:bg-cocoa disabled:opacity-60">
+            <button disabled={busy} className="rounded-md bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary-hover disabled:opacity-60">
               {busy ? "Saving…" : editor.isNew ? "Create product" : "Save changes"}
             </button>
             <button type="button" onClick={() => setEditor(null)} className="rounded-md border border-input px-5 py-2.5 text-sm">
@@ -1242,7 +1364,7 @@ function CategoriesTab({ cats, reload }: { cats: any[]; reload: () => void }) {
           </p>
         )}
         <div className="flex gap-2">
-          <button disabled={busy} className="rounded-md bg-primary px-6 py-2 text-sm font-medium text-primary-foreground hover:bg-cocoa disabled:opacity-60">
+          <button disabled={busy} className="rounded-md bg-primary px-6 py-2 text-sm font-medium text-primary-foreground hover:bg-primary-hover disabled:opacity-60">
             {busy ? "Saving…" : editing ? "Save changes" : "Add category"}
           </button>
           {(editing || name || image) && (
@@ -1509,7 +1631,7 @@ function HampersTab({ hampers, reload }: { hampers: any[]; reload: () => void })
     <div className="space-y-4">
       <div className="flex flex-wrap gap-2">
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search hampers…" className="min-w-0 flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm" />
-        <button onClick={openNew} className="rounded-md bg-primary px-5 py-2 text-sm font-medium text-primary-foreground hover:bg-cocoa">+ Add hamper</button>
+        <button onClick={openNew} className="rounded-md bg-primary px-5 py-2 text-sm font-medium text-primary-foreground hover:bg-primary-hover">+ Add hamper</button>
       </div>
 
       {editor && (
@@ -1568,7 +1690,7 @@ function HampersTab({ hampers, reload }: { hampers: any[]; reload: () => void })
 
           {err && <p role="alert" className="rounded-md border border-destructive/25 bg-destructive/[0.06] px-4 py-2.5 text-sm text-destructive">{err}</p>}
           <div className="flex flex-wrap gap-2">
-            <button disabled={busy} className="rounded-md bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground hover:bg-cocoa disabled:opacity-60">{busy ? "Saving…" : editor.isNew ? "Create hamper" : "Save changes"}</button>
+            <button disabled={busy} className="rounded-md bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary-hover disabled:opacity-60">{busy ? "Saving…" : editor.isNew ? "Create hamper" : "Save changes"}</button>
             <button type="button" onClick={() => setEditor(null)} className="rounded-md border border-input px-5 py-2.5 text-sm">Cancel</button>
           </div>
         </form>
@@ -1590,7 +1712,17 @@ function HampersTab({ hampers, reload }: { hampers: any[]; reload: () => void })
   );
 }
 
-function PromoTab({ promo, reload }: { promo: any; reload: () => void }) {
+function PromoTab({
+  promo,
+  announcements,
+  reload,
+}: {
+  promo: any;
+  announcements: string[];
+  reload: () => void;
+}) {
+  const [ann, setAnn] = useState<string[]>(announcements);
+  const [annDirty, setAnnDirty] = useState(false);
   const [form, setForm] = useState<any>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -1610,6 +1742,67 @@ function PromoTab({ promo, reload }: { promo: any; reload: () => void }) {
     }
   }, [promo, form]);
 
+  /* ---- Ticker announcements (top bar) ---- */
+  const F = "w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-gold";
+
+  const annBlock = (
+    <div className="mb-6 rounded-xl border border-border bg-card p-5 shadow-sm">
+      <h3 className="font-display text-lg font-semibold">Top Ticker Messages</h3>
+      <p className="mt-1 text-sm text-muted-foreground">
+        Ye messages site ke upar wali scrolling bar me dikhti hain. Max 8.
+      </p>
+
+      <div className="mt-4 space-y-2">
+        {ann.map((m, i) => (
+          <div key={i} className="flex items-center gap-2">
+            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-secondary text-xs font-semibold">
+              {i + 1}
+            </span>
+            <input
+              value={m}
+              onChange={(e) => {
+                setAnn((a) => a.map((x, j) => (j === i ? e.target.value : x)));
+                setAnnDirty(true);
+              }}
+              maxLength={120}
+              placeholder="e.g. Free Shipping Above ₹999"
+              className={`${F} flex-1`}
+            />
+            <button
+              type="button"
+              onClick={() => {
+                setAnn((a) => a.filter((_, j) => j !== i));
+                setAnnDirty(true);
+              }}
+              className="shrink-0 rounded-md p-2 text-muted-foreground hover:bg-secondary hover:text-destructive"
+              aria-label={`Remove message ${i + 1}`}
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </div>
+        ))}
+      </div>
+
+      {ann.length === 0 && (
+        <p className="mt-3 rounded-lg border border-dashed border-border p-4 text-center text-sm text-muted-foreground">
+          No messages — fallback text dikhega.
+        </p>
+      )}
+
+      <button
+        type="button"
+        disabled={ann.length >= 8}
+        onClick={() => {
+          setAnn((a) => [...a, ""]);
+          setAnnDirty(true);
+        }}
+        className="mt-3 flex items-center gap-1.5 text-sm font-medium text-primary hover:underline disabled:opacity-40"
+      >
+        <Plus className="h-4 w-4" /> Add message
+      </button>
+    </div>
+  );
+
   if (!form) return <p className="py-8 text-center text-sm text-muted-foreground">Loading…</p>;
 
   const save = async (e: React.FormEvent) => {
@@ -1621,6 +1814,7 @@ function PromoTab({ promo, reload }: { promo: any; reload: () => void }) {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          announcements: annDirty ? ann.filter((x) => x.trim()) : undefined,
           promo: {
             enabled: form.enabled,
             title: form.title,
@@ -1641,7 +1835,6 @@ function PromoTab({ promo, reload }: { promo: any; reload: () => void }) {
     }
   };
 
-  const F = "w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-gold";
 
   return (
     <form onSubmit={save} className="space-y-5 rounded-xl border border-gold/40 bg-card p-5 shadow-sm">
@@ -1690,7 +1883,7 @@ function PromoTab({ promo, reload }: { promo: any; reload: () => void }) {
       {err && <p role="alert" className="rounded-md border border-destructive/25 bg-destructive/[0.06] px-4 py-2.5 text-sm text-destructive">{err}</p>}
 
       <div className="flex flex-wrap gap-2">
-        <button disabled={busy} className="rounded-md bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground hover:bg-cocoa disabled:opacity-60">
+        <button disabled={busy} className="rounded-md bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary-hover disabled:opacity-60">
           {busy ? "Saving…" : "Save banner"}
         </button>
       </div>
@@ -1908,7 +2101,7 @@ function PincodesTab({ reload }: { reload: () => void }) {
           </label>
         </div>
         {err && <p role="alert" className="rounded-md border border-destructive/25 bg-destructive/[0.06] px-4 py-2.5 text-sm text-destructive">{err}</p>}
-        <button disabled={busy} className="rounded-md bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground hover:bg-cocoa disabled:opacity-60">
+        <button disabled={busy} className="rounded-md bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary-hover disabled:opacity-60">
           {busy ? "Saving…" : "Save custom charge"}
         </button>
       </form>

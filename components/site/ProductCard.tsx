@@ -1,23 +1,26 @@
 "use client";
 
 import Link from "next/link";
-import { Heart, Star } from "lucide-react";
+import { Heart, Minus, Plus, Star } from "lucide-react";
 import { useState } from "react";
 import { inr, type Product } from "@/lib/products";
 import { useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
 export function ProductCard({ p }: { p: Product }) {
-  const { add, wishlist, toggleWish } = useStore();
+  const { add, cart, setQty, remove, wishlist, toggleWish } = useStore();
   const [vi, setVi] = useState(0);
   const v = p.variants[vi];
   const off = v ? Math.round((1 - v.price / v.mrp) * 100) : 0;
   const wished = wishlist.includes(p.slug);
 
+  const inCart = cart.find((x) => x.slug === p.slug && x.variant === v.label);
+  const qty = inCart?.qty ?? 0;
+
   if (!v) return null;
 
   return (
-    <div className="group flex flex-col overflow-hidden rounded-lg border border-border bg-card transition-shadow hover:shadow-[0_12px_30px_-12px_color-mix(in_oklab,var(--primary)_35%,transparent)]">
+    <div className="group flex h-full flex-col overflow-hidden rounded-lg border border-border bg-card transition-shadow hover:shadow-[0_12px_30px_-12px_color-mix(in_oklab,var(--primary)_35%,transparent)]">
       <div className="relative aspect-square overflow-hidden bg-muted">
         <Link href={`/product/${p.slug}`}>
           <img src={p.image} alt={p.name} loading="lazy" width={600} height={600} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" />
@@ -34,7 +37,7 @@ export function ProductCard({ p }: { p: Product }) {
         <div className="flex items-center gap-1 text-xs text-muted-foreground">
           <Star className="h-3.5 w-3.5 fill-gold text-gold" /> {p.rating} <span>({p.reviews})</span>
         </div>
-        <Link href={`/product/${p.slug}`} className="font-display text-lg leading-tight font-semibold text-foreground hover:text-primary sm:text-xl">{p.name}</Link>
+        <Link href={`/product/${p.slug}`} className="line-clamp-2 font-display text-lg leading-tight font-semibold text-foreground hover:text-primary sm:text-xl">{p.name}</Link>
         <select aria-label="Pack size" value={vi} onChange={(e) => setVi(+e.target.value)} className="rounded-md border border-input bg-background px-2 py-1.5 text-sm">
           {p.variants.map((x, i) => <option key={x.label} value={i}>{x.label}</option>)}
         </select>
@@ -43,9 +46,40 @@ export function ProductCard({ p }: { p: Product }) {
           <span className="text-sm text-muted-foreground line-through">{inr(v.mrp)}</span>
           {off > 0 && <span className="text-xs font-medium text-accent-foreground">{off}% off</span>}
         </div>
-        <button disabled={!p.inStock} onClick={() => add(p.slug, v.label)} className="rounded-md bg-primary py-2 text-sm font-medium tracking-wide text-primary-foreground transition hover:bg-cocoa active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50">
-          {p.inStock ? "Add to Cart" : "Out of Stock"}
-        </button>
+        {qty > 0 ? (
+          /* BigBasket style: light box, teen segments, vertical dividers.
+             Cart me item ho tabhi dikhta hai — warna plain Add to Cart. */
+          <div className="flex h-9 items-center overflow-hidden rounded-md border border-border bg-background">
+            <button
+              aria-label={`Decrease quantity of ${p.name}`}
+              onClick={() => (qty > 1 ? setQty(p.slug, v.label, qty - 1) : remove(p.slug, v.label))}
+              className="grid h-full w-11 place-items-center text-primary transition hover:bg-secondary active:scale-95"
+            >
+              <Minus className="h-4 w-4" />
+            </button>
+            <span
+              aria-label={`Quantity ${qty}`}
+              className="min-w-8 flex-1 self-stretch border-x border-border text-center text-sm font-semibold leading-9 tabular-nums text-foreground"
+            >
+              {qty}
+            </span>
+            <button
+              aria-label={`Increase quantity of ${p.name}`}
+              onClick={() => setQty(p.slug, v.label, qty + 1)}
+              className="grid h-full w-11 place-items-center text-primary transition hover:bg-secondary active:scale-95"
+            >
+              <Plus className="h-4 w-4" />
+            </button>
+          </div>
+        ) : (
+          <button
+            disabled={!p.inStock}
+            onClick={() => add(p.slug, v.label)}
+            className="h-9 rounded-md bg-primary text-sm font-medium tracking-wide text-primary-foreground transition hover:bg-primary-hover active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {p.inStock ? "Add to Cart" : "Out of Stock"}
+          </button>
+        )}
       </div>
     </div>
   );

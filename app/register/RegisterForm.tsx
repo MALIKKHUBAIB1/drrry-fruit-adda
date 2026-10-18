@@ -126,7 +126,7 @@ export default function RegisterForm() {
             {err}
           </p>
         )}
-        <button disabled={busy} className="group flex w-full items-center justify-center gap-2 rounded-full bg-primary py-3.5 font-medium text-primary-foreground transition hover:bg-cocoa active:scale-[0.99] disabled:opacity-60">
+        <button disabled={busy} className="group flex w-full items-center justify-center gap-2 rounded-full bg-primary py-3.5 font-medium text-primary-foreground transition hover:bg-primary-hover active:scale-[0.99] disabled:opacity-60">
           {busy ? "Creating…" : "Create account"}
           <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
         </button>

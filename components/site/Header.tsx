@@ -7,6 +7,7 @@ import { useState } from "react";
 import { products } from "@/lib/products";
 import { useStore } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
+import { useCatalog } from "@/lib/catalog";
 
 const nav: { label: string; href: string }[] = [
   { label: "Home", href: "/" },
@@ -18,12 +19,6 @@ const nav: { label: string; href: string }[] = [
   { label: "Best Sellers", href: "/shop?sort=popular" },
   { label: "About", href: "/about" },
   { label: "Contact", href: "/contact" },
-];
-
-const messages = [
-  "Premium Dry Fruits, Delivered to Your Doorstep",
-  "Special Offers on Premium Gift Boxes",
-  "Free Shipping on Orders Above ₹999",
 ];
 
 function SearchBox({ onDone }: { onDone?: () => void }) {
@@ -73,17 +68,20 @@ function SearchBox({ onDone }: { onDone?: () => void }) {
   );
 }
 
-export function Header() {
+export function Header({ announcements }: { announcements?: string[] }) {
   const { count, setCartOpen, wishlist } = useStore();
   const { user } = useAuth();
+  const { settings } = useCatalog();
   const [open, setOpen] = useState(false);
+  // Messages shared context se — Header khud fetch nahi karta (duplicate hata diya)
+  const messages = announcements?.length ? announcements : settings.announcements;
 
   return (
     <>
       <div className="h-8 overflow-hidden bg-cocoa text-center text-xs tracking-wider text-gold">
         <div className="animate-ticker">
-          {messages.map((m) => (
-            <p key={m} className="flex h-6 items-center justify-center pt-2">
+          {messages.map((m, i) => (
+            <p key={`${m}-${i}`} className="flex h-6 items-center justify-center pt-2">
               {m}
             </p>
           ))}

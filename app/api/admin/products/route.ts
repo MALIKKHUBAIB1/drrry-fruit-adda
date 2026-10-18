@@ -23,6 +23,32 @@ function validateProduct(body: Record<string, unknown>, isNew: boolean) {
   const highlights = Array.isArray(body.highlights)
     ? body.highlights.map((h) => cleanText(h, 120)).filter(Boolean).slice(0, 8)
     : [];
+  // Amazon-style specs table — [{ label, value }]
+  const specs = Array.isArray(body.specs)
+    ? body.specs
+        .map((row) => {
+          const o = row as Record<string, unknown>;
+          const label = cleanText(o?.label ?? "", 60);
+          const value = cleanText(o?.value ?? "", 160);
+          return label && value ? { label, value } : null;
+        })
+        .filter((x): x is { label: string; value: string } => x !== null)
+        .slice(0, 20)
+    : undefined;
+
+  // FAQ — [{ q, a }]
+  const faq = Array.isArray(body.faq)
+    ? body.faq
+        .map((row) => {
+          const o = row as Record<string, unknown>;
+          const q = cleanText(o?.q ?? "", 160);
+          const a = cleanText(o?.a ?? "", 600);
+          return q && a ? { q, a } : null;
+        })
+        .filter((x): x is { q: string; a: string } => x !== null)
+        .slice(0, 15)
+    : undefined;
+
   const variants = Array.isArray(body.variants)
     ? body.variants
         .map((v) => {
@@ -63,7 +89,7 @@ function validateProduct(body: Record<string, unknown>, isNew: boolean) {
   if (description.length < 10) return { error: "Description must be at least 10 characters." };
   if (variants.length === 0) return { error: "At least one pack size with price and MRP is required." };
   return {
-    data: { slug, name, category, group, image, images, rating, reviews, badge, inStock, description, highlights, variants, deliveryOptions, metaTitle, metaDescription },
+    data: { slug, name, category, group, image, images, rating, reviews, badge, inStock, description, highlights, ...(specs ? { specs } : {}), ...(faq ? { faq } : {}), variants, deliveryOptions, metaTitle, metaDescription },
   };
 }
 

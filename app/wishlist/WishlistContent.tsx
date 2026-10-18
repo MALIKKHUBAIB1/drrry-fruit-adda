@@ -45,7 +45,7 @@ export default function WishlistContent() {
           <div className="flex gap-2">
             <button
               onClick={moveAllToCart}
-              className="flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-cocoa"
+              className="flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary-hover"
             >
               <ShoppingBag className="h-4 w-4" /> Move all to cart
             </button>
@@ -68,7 +68,7 @@ export default function WishlistContent() {
           </p>
           <Link
             href="/shop"
-            className="mt-6 inline-block rounded-md bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground hover:bg-cocoa"
+            className="mt-6 inline-block rounded-md bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary-hover"
           >
             Discover Best Sellers
           </Link>
@@ -123,7 +123,7 @@ export default function WishlistContent() {
                     <button
                       disabled={!p.inStock}
                       onClick={() => add(p.slug, v.label, 1)}
-                      className="flex-1 rounded-md bg-primary py-2 text-sm font-medium text-primary-foreground hover:bg-cocoa disabled:opacity-50"
+                      className="flex-1 rounded-md bg-primary py-2 text-sm font-medium text-primary-foreground hover:bg-primary-hover disabled:opacity-50"
                     >
                       Move to Cart
                     </button>

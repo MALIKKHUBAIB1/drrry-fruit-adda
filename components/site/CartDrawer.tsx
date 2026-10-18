@@ -136,7 +136,7 @@ export function CartDrawer() {
               <Link
                 href="/checkout"
                 onClick={() => setCartOpen(false)}
-                className="block rounded-md bg-primary py-3 text-center font-medium text-primary-foreground hover:bg-cocoa"
+                className="block rounded-md bg-primary py-3 text-center font-medium text-primary-foreground hover:bg-primary-hover"
               >
                 Proceed to Checkout
               </Link>

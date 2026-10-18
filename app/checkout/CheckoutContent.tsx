@@ -24,6 +24,7 @@ type Form = {
   city: string;
   state: string;
   pin: string;
+  country: string;
   notes: string;
 };
 
@@ -35,6 +36,7 @@ const initial: Form = {
   city: "",
   state: "",
   pin: "",
+  country: "India",
   notes: "",
 };
 
@@ -268,7 +270,7 @@ export default function CheckoutContent() {
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <Link
             href="/shop"
-            className="rounded-md bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground hover:bg-cocoa"
+            className="rounded-md bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary-hover"
           >
             Continue Shopping
           </Link>
@@ -312,7 +314,7 @@ export default function CheckoutContent() {
         <div className="mt-6 flex flex-col gap-2">
           <Link
             href="/login?redirect=/checkout"
-            className="rounded-full bg-primary py-3 text-sm font-medium text-primary-foreground hover:bg-cocoa"
+            className="rounded-full bg-primary py-3 text-sm font-medium text-primary-foreground hover:bg-primary-hover"
           >
             Login to continue
           </Link>
@@ -414,6 +416,7 @@ export default function CheckoutContent() {
                   city: form.city,
                   state: form.state,
                   pin: form.pin,
+                  country: form.country || "India",
                   notes: form.notes,
                   deliveryOptionId: deliveryId,
                   payment: pay,
@@ -560,6 +563,8 @@ export default function CheckoutContent() {
             <label className="text-sm">
               Full name
               <input
+                id="checkout-name"
+                name="shipping-name"
                 value={form.name}
                 onChange={set("name")}
                 required
@@ -573,6 +578,8 @@ export default function CheckoutContent() {
             <label className="text-sm">
               Phone
               <input
+                id="checkout-phone"
+                name="shipping-tel"
                 value={form.phone}
                 onChange={set("phone")}
                 required
@@ -588,6 +595,8 @@ export default function CheckoutContent() {
             <label className="text-sm sm:col-span-2">
               Email
               <input
+                id="checkout-email"
+                name="email"
                 value={form.email}
                 onChange={set("email")}
                 required
@@ -606,12 +615,14 @@ export default function CheckoutContent() {
             <label className="text-sm sm:col-span-3">
               Address
               <textarea
+                id="checkout-address"
+                name="shipping-address-line1"
                 value={form.address}
                 onChange={set("address")}
                 required
                 rows={2}
                 aria-invalid={!!errors.address}
-                autoComplete="street-address"
+                autoComplete="shipping street-address"
                 placeholder="Flat / House no, Street, Landmark"
                 className={field}
               />
@@ -620,11 +631,13 @@ export default function CheckoutContent() {
             <label className="text-sm">
               City
               <input
+                id="checkout-city"
+                name="shipping-address-level2"
                 value={form.city}
                 onChange={set("city")}
                 required
                 aria-invalid={!!errors.city}
-                autoComplete="address-level2"
+                autoComplete="shipping address-level2"
                 className={field}
               />
               {errors.city && <p className={errText}>{errors.city}</p>}
@@ -632,11 +645,13 @@ export default function CheckoutContent() {
             <label className="text-sm">
               State
               <input
+                id="checkout-state"
+                name="shipping-address-level1"
                 value={form.state}
                 onChange={set("state")}
                 required
                 aria-invalid={!!errors.state}
-                autoComplete="address-level1"
+                autoComplete="shipping address-level1"
                 className={field}
               />
               {errors.state && <p className={errText}>{errors.state}</p>}
@@ -654,8 +669,10 @@ export default function CheckoutContent() {
                 required
                 inputMode="numeric"
                 maxLength={6}
+                id="checkout-pin"
+                name="shipping-postal-code"
                 aria-invalid={!!errors.pin}
-                autoComplete="postal-code"
+                autoComplete="shipping postal-code"
                 placeholder="110001"
                 className={field}
               />
@@ -672,11 +689,26 @@ export default function CheckoutContent() {
                 </p>
               )}
             </label>
+            <label className="text-sm">
+              Country
+              <input
+                id="checkout-country"
+                name="shipping-country"
+                value={form.country}
+                onChange={set("country")}
+                required
+                autoComplete="shipping country-name"
+                className={field}
+              />
+            </label>
             <label className="text-sm sm:col-span-3">
               Delivery instructions (optional)
               <input
+                id="checkout-notes"
+                name="delivery-instructions"
                 value={form.notes}
                 onChange={set("notes")}
+                autoComplete="off"
                 placeholder="e.g. Call on arrival, leave with guard"
                 className={field}
               />
@@ -793,7 +825,7 @@ export default function CheckoutContent() {
             </p>
           </fieldset>
 
-          <button disabled={placing} className="w-full rounded-md bg-primary py-3.5 font-medium text-primary-foreground hover:bg-cocoa disabled:opacity-60">
+          <button disabled={placing} className="w-full rounded-md bg-primary py-3.5 font-medium text-primary-foreground hover:bg-primary-hover disabled:opacity-60">
             {placing ? "Processing…" : `Place Order · ${inr(liveTotal)}`}
           </button>
           {placeError && (

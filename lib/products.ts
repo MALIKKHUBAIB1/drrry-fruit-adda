@@ -48,6 +48,10 @@ export type Product = {
   inStock: boolean;
   description: string;
   highlights: string[];
+  /** Amazon-style specification table — admin se editable. Label/value pairs. */
+  specs?: { label: string; value: string }[];
+  /** FAQ accordion content — admin se editable. */
+  faq?: { q: string; a: string }[];
   variants: Variant[];
   deliveryOptions?: DeliveryOption[];
   added: number;

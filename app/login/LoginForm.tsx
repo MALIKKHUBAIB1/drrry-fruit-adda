@@ -10,6 +10,14 @@ const DEV = process.env.NODE_ENV !== "production";
 const DEV_EMAIL = "admin@dryfruitadda.in";
 const DEV_PASS = "DFA-KB4aht9Z1Hwq5YJU-2026";
 
+// Seeded dummy logins (lib/server/db.ts se match karta hai) — sirf local dev me dikhta hai
+const DEV_ACCOUNTS = [
+  { name: "Priya Sharma (2 orders)", email: "priya@example.com", pass: "Demo@123" },
+  { name: "Sneha Patel (1 shipped, 1 cancelled)", email: "sneha@example.com", pass: "Demo@123" },
+  { name: "Rahul Verma (1 delivered)", email: "rahul@example.com", pass: "Demo@123" },
+  { name: "Fatima Khan (1 delivered)", email: "fatima@example.com", pass: "Demo@123" },
+];
+
 export default function LoginForm() {
   const { user, login } = useAuth();
   const router = useRouter();
@@ -137,11 +145,40 @@ export default function LoginForm() {
           </p>
         )}
         {DEV && (
-          <p className="rounded-xl border border-gold/30 bg-gold/10 px-4 py-2.5 text-xs text-muted-foreground">
-            Dev mode: credentials pre-filled (admin@dryfruitadda.in). Remove before production.
-          </p>
+          <div className="rounded-xl border border-gold/30 bg-gold/10 p-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-gold">
+              Test accounts (dev only)
+            </p>
+            <div className="mt-2 grid gap-1.5">
+              {DEV_ACCOUNTS.map((a) => (
+                <button
+                  key={a.email}
+                  type="button"
+                  onClick={() => {
+                    setEmail(a.email);
+                    setPass(a.pass);
+                    setErr(null);
+                  }}
+                  className="flex items-center justify-between gap-2 rounded-lg bg-card/70 px-2.5 py-1.5 text-left text-xs transition hover:bg-card"
+                >
+                  <span className="min-w-0">
+                    <b className="block truncate font-medium">{a.name}</b>
+                    <span className="block truncate text-[10px] text-muted-foreground">
+                      {a.email}
+                    </span>
+                  </span>
+                  <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
+                    {a.pass}
+                  </span>
+                </button>
+              ))}
+            </div>
+            <p className="mt-2 text-[10px] text-muted-foreground">
+              Click to fill. Admin login → /admin
+            </p>
+          </div>
         )}
-        <button disabled={busy} className="group flex w-full items-center justify-center gap-2 rounded-full bg-primary py-3.5 font-medium text-primary-foreground transition hover:bg-cocoa active:scale-[0.99] disabled:opacity-60">
+        <button disabled={busy} className="group flex w-full items-center justify-center gap-2 rounded-full bg-primary py-3.5 font-medium text-primary-foreground transition hover:bg-primary-hover active:scale-[0.99] disabled:opacity-60">
           {busy ? "Logging in…" : "Login"}
           <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
         </button>

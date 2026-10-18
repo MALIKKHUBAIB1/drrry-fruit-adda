@@ -180,14 +180,14 @@ export function ReviewsSection({
           {user ? (
             <button
               onClick={() => setShowForm((s) => !s)}
-              className="flex w-full items-center justify-center gap-2 rounded-md bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground hover:bg-cocoa sm:w-auto"
+              className="flex w-full items-center justify-center gap-2 rounded-md bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary-hover sm:w-auto"
             >
               <PenLine className="h-4 w-4" /> {myReview ? "Edit your review" : "Write a review"}
             </button>
           ) : (
             <Link
               href={`/login?redirect=/product/${slug}`}
-              className="block rounded-md bg-primary px-6 py-2.5 text-center text-sm font-medium text-primary-foreground hover:bg-cocoa"
+              className="block rounded-md bg-primary px-6 py-2.5 text-center text-sm font-medium text-primary-foreground hover:bg-primary-hover"
             >
               Login to review
             </Link>
@@ -239,7 +239,7 @@ export function ReviewsSection({
           <div className="flex flex-wrap gap-2">
             <button
               disabled={busy}
-              className="rounded-md bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground hover:bg-cocoa disabled:opacity-60"
+              className="rounded-md bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary-hover disabled:opacity-60"
             >
               {busy ? "Saving…" : myReview ? "Update review" : "Submit review"}
             </button>

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Award, Headphones, Leaf, Package, ShieldCheck, Truck } from "lucide-react";
 import { NewsletterForm } from "@/components/site/Newsletter";
-import { BestSellers, CategoriesGrid, HomeTestimonials } from "@/components/site/HomeSections";
+import { BestSellers, CategoriesGrid, HomeTestimonials, NewArrivals } from "@/components/site/HomeSections";
 import { PromoBanner } from "@/components/site/PromoBanner";
 import { DEFAULT_OG_IMAGE, SITE_DESCRIPTION, SITE_NAME, SITE_TAGLINE } from "@/lib/seo";
 
@@ -81,6 +81,16 @@ export default function Home() {
       </section>
 
       {/* Promo */}
+      <section className="py-20">
+        <div className="mx-auto max-w-7xl px-4">
+          <Heading eyebrow="Freshly Added" title="New Arrivals" />
+          <NewArrivals />
+          <div className="mt-10 text-center">
+            <Link href="/shop?sort=newest" className="inline-block border-b border-primary pb-1 text-sm uppercase tracking-widest text-primary">See what&apos;s new</Link>
+          </div>
+        </div>
+      </section>
+
       <section className="bg-cocoa">
         <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 py-16 md:grid-cols-2">
           <img src="/images/gift.jpg" alt="Dryfruit Adda signature gift box" loading="lazy" width={1024} height={1024} className="w-full rounded-lg border border-gold/40 object-cover shadow-2xl" />

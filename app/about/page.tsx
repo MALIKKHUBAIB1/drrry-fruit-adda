@@ -306,7 +306,7 @@ export default function About() {
           <div className="mt-4 flex flex-wrap justify-center gap-3">
             <Link
               href="/shop?group=gift-hampers"
-              className="flex items-center gap-2 rounded-md bg-primary px-6 py-3 text-sm font-medium text-primary-foreground hover:bg-cocoa"
+              className="flex items-center gap-2 rounded-md bg-primary px-6 py-3 text-sm font-medium text-primary-foreground hover:bg-primary-hover"
             >
               <Gift className="h-4 w-4" /> Shop gift hampers
             </Link>

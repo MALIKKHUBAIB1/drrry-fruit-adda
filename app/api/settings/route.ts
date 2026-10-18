@@ -4,9 +4,16 @@ import { ADMIN_DENIED, requireAdmin } from "@/lib/server/admin";
 import { cleanText, readJsonSafe, sameOrigin } from "@/lib/server/security";
 
 // GET /api/settings — public promo settings
+// Public GET responses browser/CDN cache kar sake — isse repeat visits par
+// network hit hi nahi hota (stale-while-revalidate ke saath).
+const CACHE_HEADERS = {
+  "Cache-Control": "public, max-age=60, s-maxage=300, stale-while-revalidate=600",
+};
+
+
 export async function GET() {
   const db = await readDb();
-  return NextResponse.json({ settings: db.settings });
+  return NextResponse.json({ settings: db.settings }, { headers: CACHE_HEADERS });
 }
 
 // PUT /api/settings — admin only (promo update)
@@ -22,7 +29,24 @@ export async function PUT(req: NextRequest) {
   const body = (parsed.data ?? {}) as Record<string, unknown>;
   const promo = (body.promo ?? {}) as Record<string, unknown>;
 
+  // Ticker announcements — array ya single string dono accept
+  const rawAnn = body.announcements;
+  let announcements: string[] | null = null;
+  if (Array.isArray(rawAnn)) {
+    announcements = rawAnn
+      .map((x) => cleanText(String(x ?? ""), 120))
+      .filter(Boolean)
+      .slice(0, 8);
+  } else if (typeof rawAnn === "string") {
+    announcements = rawAnn
+      .split("\n")
+      .map((x) => cleanText(x, 120))
+      .filter(Boolean)
+      .slice(0, 8);
+  }
+
   const updated = await updateDb((db) => {
+    if (announcements?.length) db.settings.announcements = announcements;
     const p = db.settings.promo;
     if (typeof promo.enabled === "boolean") p.enabled = promo.enabled;
     if (typeof promo.title === "string") p.title = cleanText(promo.title, 120);

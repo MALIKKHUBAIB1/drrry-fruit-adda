@@ -3,23 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import {
-  CheckCircle2,
-  ChevronDown,
-  Heart,
-  KeyRound,
-  LogOut,
-  Mail,
-  MapPin,
-  Package,
-  Pencil,
-  Plus,
-  ShoppingBag,
-  Trash2,
-  Truck,
-  User as UserIcon,
-  X,
-} from "lucide-react";
+import { CheckCircle2, ChevronDown, ChevronRight, Heart, KeyRound, LogOut, Mail, MapPin, Package, Pencil, Plus, ShoppingBag, Trash2, TriangleAlert, Truck, User as UserIcon, X } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useStore } from "@/lib/store";
 import { inr } from "@/lib/products";
@@ -99,6 +83,13 @@ export default function AccountContent() {
 
   const [addrForm, setAddrForm] = useState({ ...emptyAddr });
   const [addrOpen, setAddrOpen] = useState(false);
+
+  // Danger zone — delete account
+  const [dangerOpen, setDangerOpen] = useState(false);
+  const [delPass, setDelPass] = useState("");
+  const [delConfirm, setDelConfirm] = useState("");
+  const [delErr, setDelErr] = useState<string | null>(null);
+  const [delBusy, setDelBusy] = useState(false);
   const [addrBusy, setAddrBusy] = useState(false);
   const [addrErr, setAddrErr] = useState<string | null>(null);
 
@@ -155,7 +146,7 @@ export default function AccountContent() {
         <div className="mt-6 flex justify-center gap-2">
           <Link
             href="/login"
-            className="rounded-full bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground hover:bg-cocoa"
+            className="rounded-full bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary-hover"
           >
             Login
           </Link>
@@ -256,6 +247,31 @@ export default function AccountContent() {
     }
   };
 
+  const deleteAccount = async () => {
+    setDelBusy(true);
+    setDelErr(null);
+    try {
+      const res = await fetch("/api/account", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: delPass, confirm: delConfirm }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setDelErr(d.error || "Couldn't delete the account. Try again.");
+        setDelBusy(false);
+        return;
+      }
+      // Session API ne clear kar di — ab logout + home bhejo.
+      await logout();
+      toast.success("Your account has been deleted.");
+      router.push("/");
+    } catch {
+      setDelErr("Something went wrong. Please try again.");
+      setDelBusy(false);
+    }
+  };
+
   return (
     <div className="mx-auto max-w-6xl px-4 py-10 sm:py-14">
       {/* Profile header */}
@@ -322,23 +338,30 @@ export default function AccountContent() {
       </div>
 
       {/* Stats */}
+      {/* KPI cards — admin panel jaisa */}
       <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
         {[
-          { label: "Total Orders", value: stats.totalOrders, Icon: Package },
-          { label: "In Progress", value: stats.active, Icon: Truck },
-          { label: "Delivered", value: stats.delivered, Icon: CheckCircle2 },
-          { label: "Total Spent", value: inr(stats.spent), Icon: ShoppingBag },
-        ].map(({ label, value, Icon }) => (
-          <div key={label} className="rounded-xl border border-border bg-card p-4 shadow-sm">
-            <span className="grid h-8 w-8 place-items-center rounded-lg bg-primary/10 text-primary">
-              <Icon className="h-4 w-4" />
-            </span>
-            <p className="mt-2 font-display text-2xl font-semibold text-primary">{value}</p>
-            <p className="text-[11px] uppercase tracking-wider text-muted-foreground">{label}</p>
+          { label: "Total Orders", value: String(stats.totalOrders), sub: `${stats.active} in progress`, tone: "#c9a227" },
+          { label: "In Progress", value: String(stats.active), sub: "on the way", tone: "#3a2e22" },
+          { label: "Delivered", value: String(stats.delivered), sub: "completed", tone: "#3a2e22" },
+          { label: "Total Spent", value: inr(stats.spent), sub: "all time", tone: "#c9a227" },
+        ].map((k) => (
+          <div
+            key={k.label}
+            className="relative overflow-hidden rounded-2xl border border-border bg-card p-5 shadow-sm"
+          >
+            <div
+              className="absolute -right-6 -top-6 h-24 w-24 rounded-full opacity-10"
+              style={{ backgroundColor: k.tone }}
+            />
+            <p className="text-[11px] uppercase tracking-widest text-muted-foreground">{k.label}</p>
+            <p className="mt-1 font-display text-4xl font-semibold leading-none text-primary">
+              {k.value}
+            </p>
+            <p className="mt-1.5 text-xs text-muted-foreground">{k.sub}</p>
           </div>
         ))}
       </div>
-
       {/* Tabs */}
       <div className="mt-8 flex gap-1 overflow-x-auto border-b border-border">
         {TABS.map(({ id, label, Icon }) => (
@@ -371,116 +394,169 @@ export default function AccountContent() {
       <div className="mt-6">
         {/* ---------------- OVERVIEW ---------------- */}
         {tab === "overview" && (
-          <div className="grid gap-6 lg:grid-cols-3">
-            <div className="space-y-4 lg:col-span-2">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Link
-                  href="/cart"
-                  className="flex items-center gap-3 rounded-2xl border border-border bg-card p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
-                >
-                  <span className="grid h-11 w-11 place-items-center rounded-xl bg-primary/10 text-primary">
-                    <ShoppingBag className="h-5 w-5" />
-                  </span>
-                  <span>
-                    <span className="block font-medium">My Cart</span>
-                    <span className="block text-xs text-muted-foreground">
-                      {count} item{count === 1 ? "" : "s"}
-                    </span>
-                  </span>
-                </Link>
-                <Link
-                  href="/wishlist"
-                  className="flex items-center gap-3 rounded-2xl border border-border bg-card p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
-                >
-                  <span className="grid h-11 w-11 place-items-center rounded-xl bg-primary/10 text-primary">
-                    <Heart className="h-5 w-5" />
-                  </span>
-                  <span>
-                    <span className="block font-medium">Wishlist</span>
-                    <span className="block text-xs text-muted-foreground">
-                      {wishlist.length} saved
-                    </span>
-                  </span>
-                </Link>
+          <div className="grid gap-5 lg:grid-cols-3">
+            {/* Recent orders */}
+            <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm lg:col-span-2">
+              <div className="flex items-center justify-between border-b border-border px-5 py-4">
+                <h3 className="font-display text-lg font-semibold">Recent Orders</h3>
+                {orders.length > 0 && (
+                  <button
+                    onClick={() => setTab("orders")}
+                    className="text-xs font-medium text-primary hover:underline"
+                  >
+                    View all →
+                  </button>
+                )}
               </div>
 
-              <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-display text-lg font-semibold">Recent Orders</h3>
-                  {orders.length > 0 && (
-                    <button
-                      onClick={() => setTab("orders")}
-                      className="text-xs font-medium text-primary hover:underline"
-                    >
-                      View all →
-                    </button>
-                  )}
+              {ordersLoading ? (
+                <p className="px-5 py-8 text-sm text-muted-foreground">Loading…</p>
+              ) : orders.length === 0 ? (
+                <div className="px-5 py-12 text-center">
+                  <Package className="mx-auto h-8 w-8 text-gold" />
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    No orders yet.{" "}
+                    <Link href="/shop" className="font-medium text-primary hover:underline">
+                      Start shopping
+                    </Link>
+                  </p>
                 </div>
-                {ordersLoading ? (
-                  <p className="mt-3 text-sm text-muted-foreground">Loading…</p>
-                ) : orders.length === 0 ? (
-                  <div className="mt-4 rounded-xl border border-dashed border-border p-8 text-center">
-                    <Package className="mx-auto h-8 w-8 text-gold" />
-                    <p className="mt-2 text-sm text-muted-foreground">
-                      No orders yet.{" "}
-                      <Link href="/shop" className="font-medium text-primary hover:underline">
-                        Start shopping
-                      </Link>
-                    </p>
-                  </div>
-                ) : (
-                  <ul className="mt-3 space-y-2">
-                    {orders.slice(0, 4).map((o) => (
-                      <li
-                        key={o.id}
-                        className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/60 px-3 py-2.5 text-sm"
-                      >
-                        <span className="font-mono text-xs font-semibold">{o.id}</span>
-                        <span className="text-xs text-muted-foreground">
-                          {new Date(o.createdAt).toLocaleDateString("en-IN", {
-                            day: "numeric",
-                            month: "short",
-                            year: "numeric",
-                          })}
-                        </span>
+              ) : (
+                <ul className="divide-y divide-border/70">
+                  {orders.slice(0, 5).map((o) => {
+                    const qty = o.items.reduce((n, i) => n + i.qty, 0);
+                    return (
+                      <li key={o.id} className="flex items-center gap-4 px-5 py-4">
+                        <div className="min-w-0 flex-1">
+                          <p className="font-mono text-sm font-semibold tracking-wide">{o.id}</p>
+                          <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                            {o.items[0]?.name ?? "Mixed box"}
+                            {qty > 1 ? ` +${qty - 1} more` : ""} ·{" "}
+                            {new Date(o.createdAt).toLocaleDateString("en-IN", {
+                              day: "numeric",
+                              month: "short",
+                            })}
+                          </p>
+                        </div>
+
                         <span
                           className={cn(
-                            "rounded-full px-2 py-0.5 text-[11px] font-medium",
+                            "shrink-0 rounded-full px-3 py-1 text-xs font-medium",
                             STATUS_STYLE[o.status] ?? "bg-border text-muted-foreground",
                           )}
                         >
                           {labelStatus(o.status)}
                         </span>
-                        <b className="text-primary">{inr(o.total)}</b>
+
+                        <b className="w-20 shrink-0 text-right font-display text-base text-primary">
+                          {inr(o.total)}
+                        </b>
+
+                        <Link
+                          href={`/track?id=${o.id}`}
+                          aria-label={`Track order ${o.id}`}
+                          className="shrink-0 rounded-lg p-2 text-muted-foreground transition hover:bg-secondary hover:text-primary"
+                        >
+                          <Truck className="h-5 w-5" />
+                        </Link>
                       </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
+                    );
+                  })}
+                </ul>
+              )}
             </div>
 
+            {/* Right rail */}
             <div className="space-y-4">
-              <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-display text-lg font-semibold">Default Address</h3>
-                  <button
-                    onClick={() => setTab("addresses")}
-                    className="text-xs font-medium text-primary hover:underline"
+              {/* Quick links */}
+              <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+                {[
+                  {
+                    label: "My Cart",
+                    value: `${count} item${count === 1 ? "" : "s"}`,
+                    href: "/cart",
+                    Icon: ShoppingBag,
+                  },
+                  {
+                    label: "Wishlist",
+                    value: `${wishlist.length} saved`,
+                    href: "/wishlist",
+                    Icon: Heart,
+                  },
+                  {
+                    label: "Continue shopping",
+                    value: "Fresh arrivals",
+                    href: "/shop",
+                    Icon: Package,
+                  },
+                  {
+                    label: "Contact support",
+                    value: "We reply within 24h",
+                    href: "/contact",
+                    Icon: Mail,
+                  },
+                ].map(({ label, value, href, Icon }, i) => (
+                  <Link
+                    key={label}
+                    href={href}
+                    className={cn(
+                      "group flex items-center gap-3 px-5 py-3.5 transition hover:bg-secondary/60",
+                      i > 0 && "border-t border-border/70",
+                    )}
                   >
-                    Manage →
-                  </button>
+                    <Icon className="h-4 w-4 shrink-0 text-primary" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-medium">{label}</span>
+                      <span className="block text-xs text-muted-foreground">{value}</span>
+                    </span>
+                    <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/40 transition group-hover:translate-x-0.5" />
+                  </Link>
+                ))}
+              </div>
+
+              {/* Delivery address */}
+              <div className="rounded-2xl border border-border bg-card shadow-sm">
+                <div className="flex items-center justify-between border-b border-border px-5 py-3.5">
+                  <h3 className="font-display text-base font-semibold">Delivery Address</h3>
+                  {addresses.length > 0 && (
+                    <button
+                      onClick={() => setTab("addresses")}
+                      className="text-xs font-medium text-primary hover:underline"
+                    >
+                      Manage →
+                    </button>
+                  )}
                 </div>
+
                 {addresses.length === 0 ? (
-                  <p className="mt-3 text-sm text-muted-foreground">No saved addresses yet.</p>
+                  <div className="px-5 py-7 text-center">
+                    <MapPin className="mx-auto h-6 w-6 text-gold" />
+                    <p className="mt-1.5 text-xs text-muted-foreground">No saved address yet</p>
+                    <button
+                      onClick={() => {
+                        setTab("addresses");
+                        setAddrOpen(true);
+                      }}
+                      className="mt-3 rounded-full bg-primary px-4 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary-hover"
+                    >
+                      Add address
+                    </button>
+                  </div>
                 ) : (
                   (() => {
                     const a = addresses.find((x) => x.isDefault) ?? addresses[0];
                     return (
-                      <div className="mt-3 rounded-lg border border-gold/30 bg-gold/[0.05] p-4 text-sm">
+                      <div className="px-5 py-4 text-sm">
                         <p className="flex items-center gap-2 font-medium">
-                          <MapPin className="h-4 w-4 text-gold" /> {a.label}
+                          <MapPin className="h-3.5 w-3.5 text-gold" />
+                          {a.label}
+                          {a.isDefault && (
+                            <span className="rounded-full bg-gold/15 px-1.5 py-0.5 text-[10px] font-semibold text-gold">
+                              Default
+                            </span>
+                          )}
                         </p>
-                        <p className="mt-1 text-muted-foreground">
+                        <p className="mt-1.5 leading-relaxed text-muted-foreground">
                           {a.name} · {a.phone}
                           <br />
                           {a.address}
@@ -492,27 +568,10 @@ export default function AccountContent() {
                   })()
                 )}
               </div>
-
-              <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-                <h3 className="font-display text-lg font-semibold">Quick Actions</h3>
-                <div className="mt-3 space-y-2 text-sm">
-                  <Link href="/track" className="flex items-center gap-2 rounded-lg px-2 py-2 hover:bg-secondary">
-                    <Truck className="h-4 w-4 text-primary" /> Track an order
-                  </Link>
-                  <Link href="/shop" className="flex items-center gap-2 rounded-lg px-2 py-2 hover:bg-secondary">
-                    <ShoppingBag className="h-4 w-4 text-primary" /> Continue shopping
-                  </Link>
-                  <Link href="/wishlist" className="flex items-center gap-2 rounded-lg px-2 py-2 hover:bg-secondary">
-                    <Heart className="h-4 w-4 text-primary" /> View wishlist
-                  </Link>
-                  <Link href="/contact" className="flex items-center gap-2 rounded-lg px-2 py-2 hover:bg-secondary">
-                    <Mail className="h-4 w-4 text-primary" /> Contact support
-                  </Link>
-                </div>
-              </div>
             </div>
           </div>
         )}
+
 
         {/* ---------------- ORDERS ---------------- */}
         {tab === "orders" && (
@@ -664,7 +723,7 @@ export default function AccountContent() {
               <h3 className="font-display text-lg font-semibold">Saved Addresses</h3>
               <button
                 onClick={() => setAddrOpen((s) => !s)}
-                className="flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-cocoa"
+                className="flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary-hover"
               >
                 <Plus className="h-4 w-4" /> Add address
               </button>
@@ -708,7 +767,7 @@ export default function AccountContent() {
                   </p>
                 )}
                 <div className="flex gap-2">
-                  <button disabled={addrBusy} className="rounded-md bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground hover:bg-cocoa disabled:opacity-60">
+                  <button disabled={addrBusy} className="rounded-md bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary-hover disabled:opacity-60">
                     {addrBusy ? "Saving…" : "Save address"}
                   </button>
                   <button type="button" onClick={() => { setAddrOpen(false); setAddrForm({ ...emptyAddr }); setAddrErr(null); }} className="rounded-md border border-input px-5 py-2.5 text-sm">
@@ -846,7 +905,7 @@ export default function AccountContent() {
                     <p className={cn("text-sm", passMsg.ok ? "text-primary" : "text-destructive")}>{passMsg.text}</p>
                   )}
                   <div className="flex gap-2">
-                    <button className="rounded-md bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground hover:bg-cocoa">
+                    <button className="rounded-md bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary-hover">
                       Update password
                     </button>
                     <button type="button" onClick={() => setShowPass(false)} className="rounded-md border border-input px-5 py-2.5 text-sm">
@@ -874,8 +933,102 @@ export default function AccountContent() {
               >
                 <LogOut className="h-4 w-4" /> Logout
               </button>
+              </div>
+
+              {/* ---------------- DANGER ZONE ---------------- */}
+              <div className="mt-6 rounded-2xl border border-destructive/30 bg-destructive/[0.04] p-6 lg:col-span-2">
+                <div className="flex items-start gap-3">
+                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-destructive/10 text-destructive">
+                    <TriangleAlert className="h-4.5 w-4.5" />
+                  </span>
+                  <div>
+                    <h3 className="font-display text-lg font-semibold text-destructive">
+                      Danger Zone
+                    </h3>
+                    <p className="mt-0.5 text-sm text-muted-foreground">
+                      These actions are permanent and cannot be undone.
+                    </p>
+                  </div>
+                </div>
+
+                {!dangerOpen ? (
+                  <button
+                    onClick={() => setDangerOpen(true)}
+                    className="mt-4 flex items-center gap-2 rounded-md border border-destructive/40 px-5 py-2.5 text-sm font-medium text-destructive transition hover:bg-destructive hover:text-white"
+                  >
+                    <Trash2 className="h-4 w-4" /> Delete my account
+                  </button>
+                ) : (
+                  <div className="mt-5 rounded-xl border border-destructive/30 bg-card p-5">
+                    <p className="text-sm font-medium text-foreground">
+                      This will permanently delete:
+                    </p>
+                    <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
+                      <li>• Your profile, saved addresses and reviews</li>
+                      <li>• Your wishlist, cart and newsletter subscription</li>
+                      <li>
+                        • Order history is kept for our records, but your name, email,
+                        phone and address are removed
+                      </li>
+                    </ul>
+
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                      <label className="text-sm font-medium">
+                        Confirm with your password
+                        <input
+                          type="password"
+                          value={delPass}
+                          onChange={(e) => setDelPass(e.target.value)}
+                          autoComplete="current-password"
+                          placeholder="••••••••"
+                          className={cn(inputCls, "mt-1.5")}
+                        />
+                      </label>
+                      <label className="text-sm font-medium">
+                        Type <span className="font-mono font-bold text-destructive">DELETE</span> to confirm
+                        <input
+                          value={delConfirm}
+                          onChange={(e) => setDelConfirm(e.target.value)}
+                          placeholder="DELETE"
+                          className={cn(inputCls, "mt-1.5 font-mono uppercase")}
+                        />
+                      </label>
+                    </div>
+
+                    {delErr && (
+                      <p
+                        role="alert"
+                        className="mt-3 rounded-lg border border-destructive/30 bg-destructive/[0.07] px-3 py-2 text-sm text-destructive"
+                      >
+                        {delErr}
+                      </p>
+                    )}
+
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <button
+                        onClick={deleteAccount}
+                        disabled={delBusy || delConfirm !== "DELETE" || !delPass}
+                        className="flex items-center gap-2 rounded-md bg-destructive px-5 py-2.5 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        {delBusy ? "Deleting…" : "Permanently delete account"}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setDangerOpen(false);
+                          setDelPass("");
+                          setDelConfirm("");
+                          setDelErr(null);
+                        }}
+                        className="rounded-md border border-input px-5 py-2.5 text-sm font-medium hover:bg-secondary"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
         )}
       </div>
     </div>

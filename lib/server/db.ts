@@ -146,6 +146,8 @@ export type DbPincode = {
 };
 
 export type DbSettings = {
+  // Top ticker bar ke messages — admin se editable
+  announcements: string[];
   promo: {
     enabled: boolean;
     title: string;
@@ -276,6 +278,11 @@ function seedHampers(): DbHamper[] {
 function seedSettings(): DbSettings {
   const now = Date.now();
   return {
+    announcements: [
+      "Premium Dry Fruits, Delivered to Your Doorstep",
+      "Special Offers on Premium Gift Boxes",
+      "Free Shipping on Orders Above ₹999",
+    ],
     promo: {
       enabled: true,
       title: "Special Offers on Premium Gift Boxes",
@@ -401,11 +408,135 @@ function seed(): DbShape {
     orders: seedOrders(),
     contacts: seedContacts(),
     reviews: seedReviews(),
-    addresses: [],
+    addresses: seedAddresses(),
     newsletter: seedNewsletter(),
     carts: {},
     wishlists: {},
   };
+}
+
+function seedAddresses(): DbAddress[] {
+  const now = new Date().toISOString();
+  const mk = (
+    id: string,
+    userId: string,
+    label: string,
+    name: string,
+    phone: string,
+    address: string,
+    city: string,
+    state: string,
+    pin: string,
+    isDefault: boolean,
+  ): DbAddress => ({ id, userId, label, name, phone, address, city, state, pin, isDefault, createdAt: now });
+  return [
+    mk("ADDR-DEMO1", "U-DEMO1", "Home", "Priya Sharma", "9876500011", "402, Sunrise Residency, Andheri West", "Mumbai", "Maharashtra", "400058", true),
+    mk("ADDR-DEMO2", "U-DEMO1", "Office", "Priya Sharma", "9876500011", "7th Floor, Tech Park, Hinjewadi", "Pune", "Maharashtra", "411057", false),
+    mk("ADDR-DEMO3", "U-DEMO3", "Home", "Sneha Patel", "9876500033", "B-12, Green Park Colony", "Pune", "Maharashtra", "411016", true),
+  ];
+}
+
+// ---- Product specifications (Amazon-style table) ----
+// Fresh DB me bhi, aur purane DB me bhi specs missing ho to backfill ho jaate hain.
+// Admin ne khud set kiye hon to wo untouched rehte hain.
+
+const FSSAI_LIC = "10021064001857";
+const ORIGIN: Record<string, string> = {
+  almonds: "Imported (USA)",
+  cashews: "Imported (Vietnam)",
+  pistachios: "Imported (Iran)",
+  walnuts: "Imported (Chile)",
+  dates: "Imported (Saudi Arabia)",
+  anjeer: "Imported (Iran)",
+  raisins: "Imported (Chile)",
+  seeds: "Imported (Australia)",
+  gift: "Packed in India",
+};
+const FORM: Record<string, string> = {
+  almonds: "Whole, hand-sorted kernels",
+  cashews: "Whole W240 grade",
+  pistachios: "Roasted & salted, shells removed",
+  walnuts: "Whole kernels, no shells",
+  dates: "Whole, seedless",
+  anjeer: "Whole, grade A",
+  raisins: "Golden, seedless",
+  seeds: "Blended seed mix",
+  gift: "Mixed assortment",
+};
+const CATEGORY_LABEL: Record<string, string> = {
+  almonds: "Almonds",
+  cashews: "Cashews",
+  pistachios: "Pistachios",
+  walnuts: "Walnuts",
+  dates: "Dates",
+  anjeer: "Anjeer (Figs)",
+  raisins: "Raisins",
+  seeds: "Seeds & Mixes",
+  gift: "Gift Hamper",
+};
+
+function defaultSpecs(p: Product): { label: string; value: string }[] {
+  const weights = p.variants.map((v) => v.label).join(", ");
+  return [
+    { label: "Brand", value: "Dryfruit Adda" },
+    { label: "Category", value: CATEGORY_LABEL[p.category] ?? p.category },
+    { label: "Item Form", value: FORM[p.category] ?? "Whole" },
+    { label: "Net Weight", value: weights },
+    { label: "Primary Ingredient", value: CATEGORY_LABEL[p.category] ?? p.category },
+    { label: "Shelf Life", value: "12 months from manufacturing" },
+    { label: "Storage", value: "Cool & dry place, airtight container" },
+    { label: "Country of Origin", value: ORIGIN[p.category] ?? "India" },
+    { label: "FSSAI Lic. No.", value: FSSAI_LIC },
+    { label: "Package Contains", value: `1 x ${CATEGORY_LABEL[p.category] ?? "Pack"} (${weights})` },
+    { label: "Best Before", value: "6 months after delivery" },
+    { label: "Return Policy", value: "7-day easy returns on unopened packs" },
+  ];
+}
+
+// ---- Product FAQ (accordion) ----
+// Fresh DB me bhi, purane DB me missing ho to backfill. Admin ke set kiye hue
+// FAQ kabhi overwrite nahi hote.
+function defaultFaq(p: Product): { q: string; a: string }[] {
+  const item = CATEGORY_LABEL[p.category] ?? p.category;
+  const weights = p.variants.map((v) => v.label).join(", ");
+  const common = [
+    {
+      q: "How long does this stay fresh?",
+      a: "About 12 months from manufacturing. We pack in small batches so what you receive is always fresh.",
+    },
+    {
+      q: "How should I store it?",
+      a: "Keep in a cool, dry place in an airtight container. Refrigerate after opening for the best texture.",
+    },
+    {
+      q: "Is it safe to eat raw?",
+      a: "Yes. Every batch is cleaned, sorted and quality-checked before packing. Wash lightly before eating.",
+    },
+    {
+      q: "Do you offer a replacement if damaged?",
+      a: "Yes. If the pack arrives damaged or stale, we replace it free within 7 days of delivery.",
+    },
+    {
+      q: "What are the available pack sizes?",
+      a: `${item} is available in ${weights}. You can pick the size on this page before adding to cart.`,
+    },
+  ];
+
+  if (p.category === "gift" || p.group === "gift-hampers") {
+    return [
+      {
+        q: "What comes inside the hamper?",
+        a: "A curated mix of premium dry fruits packed in a keepsake box, ready to gift.",
+      },
+      {
+        q: "Is gift wrapping available?",
+        a: "Yes. The hamper ships in a gift-ready box with a message card included.",
+      },
+      ...common.slice(0, 3),
+    ];
+  }
+
+  return common;
 }
 
 function normalize(db: Partial<DbShape>): DbShape {
@@ -431,7 +562,11 @@ function normalize(db: Partial<DbShape>): DbShape {
   // Naye seed products (code me add hue) merge kar do taaki wo bhi dikhein.
   const existing = db.products?.length ? db.products : s.products;
   const seenSlugs = new Set(existing.map((p) => p.slug));
-  const products = [...existing, ...s.products.filter((p) => !seenSlugs.has(p.slug))];
+  const products = [...existing, ...s.products.filter((p) => !seenSlugs.has(p.slug))].map((p) => ({
+    ...p,
+    specs: p.specs?.length ? p.specs : defaultSpecs(p),
+    faq: p.faq?.length ? p.faq : defaultFaq(p),
+  }));
   // Seed reviews refresh hote rahen (taaki purani Hinglish seed reviews
   // English wali se replace ho jayein); real user reviews untouched rehte hain.
   const userReviews = (db.reviews ?? []).filter((r) => !r.userId.startsWith("seed-"));
@@ -452,14 +587,20 @@ function normalize(db: Partial<DbShape>): DbShape {
       const seen = new Set(existing.map((h) => h.slug));
       return [...existing, ...s.hampers.filter((h) => !seen.has(h.slug))];
     })(),
-    settings: db.settings ?? s.settings,
+    settings: {
+      ...s.settings,
+      ...db.settings,
+      announcements: db.settings?.announcements?.length
+        ? db.settings.announcements
+        : s.settings.announcements,
+    },
     pincodes: db.pincodes ?? s.pincodes,
     hiddenPincodes: db.hiddenPincodes ?? [],
     coupons: db.coupons ?? s.coupons,
     orders: db.orders ?? [],
     contacts: db.contacts ?? [],
     reviews,
-    addresses: db.addresses ?? [],
+    addresses: db.addresses ?? s.addresses,
     newsletter: db.newsletter ?? [],
     carts: db.carts ?? {},
     wishlists: db.wishlists ?? {},
@@ -468,10 +609,49 @@ function normalize(db: Partial<DbShape>): DbShape {
 
 // ---------- Read / Write ----------
 
+// ---- Read cache ----
+// Page load pe 6-10 API calls chalti hain. Har call pe poora db.json
+// read + JSON.parse + normalize hota tha. Ab:
+//  1. file ka mtime+size check (bahut sasta stat call)
+//  2. same ho to cached object return (zero disk parse)
+//  3. writeDb cache invalidate karta hai
+let cache: { mtimeMs: number; size: number; db: DbShape } | null = null;
+let cacheInFlight: Promise<DbShape> | null = null;
+
+export function invalidateDbCache() {
+  cache = null;
+}
+
 export async function readDb(): Promise<DbShape> {
   try {
-    const raw = await fs.readFile(DB_PATH, "utf-8");
-    return normalize(JSON.parse(raw));
+    const st = await fs.stat(DB_PATH);
+
+    // Cache hit — file change nahi hui
+    if (cache && cache.mtimeMs === st.mtimeMs && cache.size === st.size) {
+      return cache.db;
+    }
+
+    // Concurrent reads: sab ek hi read ka wait karein (thundering herd fix)
+    if (cacheInFlight) {
+      const db = await cacheInFlight;
+      const st2 = await fs.stat(DB_PATH).catch(() => null);
+      if (st2 && cache && st2.mtimeMs === cache.mtimeMs) return db;
+    }
+
+    const promise = (async () => {
+      const raw = await fs.readFile(DB_PATH, "utf-8");
+      const db = normalize(JSON.parse(raw));
+      const stNow = await fs.stat(DB_PATH).catch(() => null);
+      cache = { mtimeMs: stNow?.mtimeMs ?? 0, size: stNow?.size ?? 0, db };
+      return db;
+    })();
+
+    cacheInFlight = promise;
+    try {
+      return await promise;
+    } finally {
+      cacheInFlight = null;
+    }
   } catch {
     const db = seed();
     await writeDb(db);
@@ -485,6 +665,7 @@ export async function writeDb(db: DbShape): Promise<void> {
   const tmp = DB_PATH + ".tmp";
   await fs.writeFile(tmp, JSON.stringify(db, null, 2), "utf-8");
   await fs.rename(tmp, DB_PATH);
+  invalidateDbCache();
 }
 
 export async function updateDb<T>(fn: (db: DbShape) => T | Promise<T>): Promise<T> {

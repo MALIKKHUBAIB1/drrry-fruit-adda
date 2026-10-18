@@ -1,5 +1,6 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { readDb } from "@/lib/server/db";
+import { getSessionUser } from "@/lib/server/auth";
 import { cleanText, rateLimit, readJsonSafe, sameOrigin } from "@/lib/server/security";
 import { STATUS_LABEL } from "@/lib/server/events";
 
@@ -49,8 +50,10 @@ function toTrackResult(o: any): TrackResult {
   };
 }
 
-// POST /api/track { orderId, email } — public order tracking (email verify required)
-export async function POST(req: Request) {
+// POST /api/track { orderId, email? } — order tracking.
+// Logged-in user: email optional (session se verify hota hai, khud ka order hi milega).
+// Guest: orderId + email dono chahiye.
+export async function POST(req: NextRequest) {
   if (!sameOrigin(req)) {
     return NextResponse.json({ error: "Cross-origin request blocked." }, { status: 403 });
   }
@@ -67,15 +70,23 @@ export async function POST(req: Request) {
   const orderId = cleanText(body.orderId, 40).toUpperCase();
   const email = String(body.email ?? "").trim().toLowerCase().slice(0, 254);
   if (!orderId) return NextResponse.json({ error: "Enter your order ID." }, { status: 400 });
-  if (!email) return NextResponse.json({ error: "Enter the email used for the order." }, { status: 400 });
+
+  const session = await getSessionUser(req);
+  if (!session && !email) {
+    return NextResponse.json({ error: "Enter the email used for the order." }, { status: 400 });
+  }
 
   const db = await readDb();
-  const order = db.orders.find(
-    (o) => o.id.toUpperCase() === orderId && o.email.toLowerCase() === email,
-  );
+  // Logged-in: sirf apna order (userId match). Guest: orderId + email match.
+  const order = session
+    ? db.orders.find((o) => o.id.toUpperCase() === orderId && o.userId === session.id)
+    : db.orders.find((o) => o.id.toUpperCase() === orderId && o.email.toLowerCase() === email);
+
   if (!order) {
     return NextResponse.json(
-      { error: "No order found with this ID and email. Please check and try again." },
+      session
+        ? { error: "We couldn't find that order ID under your account." }
+        : { error: "No order found with this ID and email. Please check and try again." },
       { status: 404 },
     );
   }
@@ -83,17 +94,21 @@ export async function POST(req: Request) {
 }
 
 // GET /api/track?id=DFA-XXXX — live fetch (SSE ke baad refresh/poll ke liye)
-export async function GET(req: Request) {
+export async function GET(req: NextRequest) {
   const sp = new URL(req.url).searchParams;
   const orderId = cleanText(sp.get("id") ?? "", 40).toUpperCase();
   const email = String(sp.get("email") ?? "").trim().toLowerCase().slice(0, 254);
-  if (!orderId || !email) {
-    return NextResponse.json({ error: "id and email required." }, { status: 400 });
+  if (!orderId) return NextResponse.json({ error: "id required." }, { status: 400 });
+
+  const session = await getSessionUser(req);
+  if (!session && !email) {
+    return NextResponse.json({ error: "email required." }, { status: 400 });
   }
+
   const db = await readDb();
-  const order = db.orders.find(
-    (o) => o.id.toUpperCase() === orderId && o.email.toLowerCase() === email,
-  );
+  const order = session
+    ? db.orders.find((o) => o.id.toUpperCase() === orderId && o.userId === session.id)
+    : db.orders.find((o) => o.id.toUpperCase() === orderId && o.email.toLowerCase() === email);
   if (!order) return NextResponse.json({ error: "Order not found." }, { status: 404 });
   return NextResponse.json({ order: toTrackResult(order) });
 }
