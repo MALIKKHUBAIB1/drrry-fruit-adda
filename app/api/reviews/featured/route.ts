@@ -20,7 +20,10 @@ export async function GET(req: Request) {
     .slice(0, limit)
     .map((r) => {
       const p = db.products.find((x) => x.slug === r.productSlug);
-      return { ...r, productName: p?.name ?? r.productSlug };
+      // Public endpoint — internal userId leak nahi hona chahiye (enumeration
+      // + cross-endpoint correlation vector).
+      const { userId: _omit, ...pub } = r;
+      return { ...pub, productName: p?.name ?? r.productSlug };
     });
   return NextResponse.json({ reviews: featured }, { headers: CACHE_HEADERS });
 }

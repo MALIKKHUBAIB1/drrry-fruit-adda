@@ -7,7 +7,18 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "eslint . --ext .js,.ts,.tsx --max-warnings 0",
+    "test": "node --import tsx --test",
+    "test:coverage": "node --import tsx --test --experimental-test-coverage",
+    "test:security": "tsx --test tests/security/*.test.ts",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
+    "test:load": "node tests/load/node-load.mjs",
+    "audit:deps": "npm audit --audit-level=moderate",
+    "scan:secrets": "node scripts/secret-scan.mjs",
+    "qa:ci": "npm run lint && npm run test && npm run test:security && npm run build",
+    "typecheck": "tsc --noEmit",
+    "qa": "bash scripts/qa-gate.sh"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
@@ -52,6 +63,7 @@
     "react-hook-form": "^7.71.2",
     "react-resizable-panels": "^4.6.5",
     "recharts": "^2.15.4",
+    "server-only": "^0.0.1",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.5.0",
     "tailwindcss": "^4.2.1",
@@ -60,11 +72,16 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.1",
     "@tailwindcss/postcss": "^4.2.1",
     "@types/node": "^22.16.5",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^16.4.2",
+    "esmock": "^2.8.0",
     "postcss": "^8.5.3",
+    "tsx": "^4.23.15",
     "typescript": "^5.8.3"
   }
 }

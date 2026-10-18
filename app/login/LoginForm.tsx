@@ -1,14 +1,12 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { ArrowRight, Eye, EyeOff, Lock, Mail } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { AuthLayout, authInput } from "@/components/site/AuthLayout";
 
 const DEV = process.env.NODE_ENV !== "production";
-const DEV_EMAIL = "admin@dryfruitadda.in";
-const DEV_PASS = "DFA-KB4aht9Z1Hwq5YJU-2026";
 
 // Seeded dummy logins (lib/server/db.ts se match karta hai) — sirf local dev me dikhta hai
 const DEV_ACCOUNTS = [
@@ -29,7 +27,7 @@ export default function LoginForm() {
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const submit = async (e: React.FormEvent) => {
+  const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (isAdminEmail) {
       setErr("Admin account — please use the Admin Login page.");
@@ -72,23 +70,7 @@ export default function LoginForm() {
     >
       <form
         noValidate
-        onSubmit={async (e) => {
-          e.preventDefault();
-          if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-            setErr("Enter a valid email address.");
-            return;
-          }
-          if (!pass) {
-            setErr("Enter your password.");
-            return;
-          }
-          setBusy(true);
-          setErr(null);
-          const msg = await login(email, pass);
-          setBusy(false);
-          if (msg) setErr(msg);
-          else router.push(redirect ?? "/account");
-        }}
+        onSubmit={submit}
         className="space-y-4"
       >
         <label className="block text-sm font-medium">

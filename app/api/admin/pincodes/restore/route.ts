@@ -1,10 +1,14 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { updateDb } from "@/lib/server/db";
 import { ADMIN_DENIED, requireAdmin } from "@/lib/server/admin";
-import { cleanText } from "@/lib/server/security";
+import { cleanText, sameOrigin } from "@/lib/server/security";
 
 // POST /api/admin/pincodes/restore?pin= — hidden pincode wapas list me lao
 export async function POST(req: NextRequest) {
+  if (!sameOrigin(req)) {
+    return NextResponse.json({ error: "Cross-origin request blocked." }, { status: 403 });
+  }
+
   const { status } = await requireAdmin(req);
   if (status !== 200) return NextResponse.json({ error: ADMIN_DENIED(status) }, { status });
   const pin = cleanText(new URL(req.url).searchParams.get("pin") ?? "", 6);

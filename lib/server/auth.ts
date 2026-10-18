@@ -13,11 +13,15 @@ export function sessionExpiry() {
 
 export function sessionCookie(token: string, expiresAt: string) {
   const expires = new Date(expiresAt);
-  return `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax; Expires=${expires.toUTCString()}`;
+  // Secure: HTTPS pe hi bhejo. Localhost pe cookie chalti rahegi (browsers
+  // http://localhost ko secure context maante hain).
+  const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
+  return `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax${secure}; Expires=${expires.toUTCString()}`;
 }
 
 export function clearSessionCookie() {
-  return `${SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`;
+  const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
+  return `${SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax${secure}; Max-Age=0`;
 }
 
 export function getTokenFromRequest(req: NextRequest): string | null {

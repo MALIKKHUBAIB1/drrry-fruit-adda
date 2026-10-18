@@ -6,6 +6,7 @@ import { Banknote, CheckCircle2, Lock, MapPin, QrCode, ShoppingBag, Truck } from
 import { inr } from "@/lib/products";
 import { useCatalog } from "@/lib/catalog";
 import { useStore } from "@/lib/store";
+import type { ApiOrder } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { FreeShippingBar, Summary } from "@/components/site/CartSummary";
 import { cn } from "@/lib/utils";
@@ -369,39 +370,9 @@ export default function CheckoutContent() {
             try {
               const isOnline = pay === "online";
 
-              // 1) Online payment: pehle Razorpay order banao
-              let rzp: { keyId: string; orderId: string; amount: number; currency: string } | null = null;
-              if (isOnline) {
-                const r = await fetch("/api/payments/create-order", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  credentials: "include",
-                  body: JSON.stringify({
-                    amount: Math.round(liveTotal * 100),
-                    receipt: `DFA-${Date.now().toString(36).toUpperCase()}`,
-                  }),
-                });
-                const d = await r.json().catch(() => ({}));
-                if (!r.ok) throw new Error(d.error || "Couldn't start payment.");
-                rzp = d;
-              }
-
-              // 2) Razorpay popup open karo (online only)
-              let paymentResult: { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string } | null = null;
-              if (isOnline && rzp) {
-                paymentResult = await openRazorpayCheckout({
-                  keyId: rzp.keyId,
-                  orderId: rzp.orderId,
-                  amount: rzp.amount,
-                  currency: rzp.currency,
-                  name: form.name,
-                  email: form.email,
-                  phone: form.phone,
-                  description: "Dryfruit Adda order",
-                });
-              }
-
-              // 3) DB order create karo
+              // 1) Pehle apna order banao — amount server ke paas hona chahiye.
+              //    (Pehle payment pehle banta tha, jisme amount CLIENT bhejta tha —
+              //     usse koi ₹1 me ₹5,000 ka order pay kar sakta tha.)
               const res = await fetch("/api/orders", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -424,21 +395,59 @@ export default function CheckoutContent() {
               });
               const data = await res.json().catch(() => ({}));
               if (!res.ok) throw new Error(data.error || "Couldn't place your order.");
-              const order = data.order;
+              const order = data.order as ApiOrder;
 
-              // 4) Online: signature verify + paid mark
-              if (isOnline && rzp && paymentResult) {
-                const v = await fetch("/api/payments/verify", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  credentials: "include",
-                  body: JSON.stringify({
-                    ...paymentResult,
-                    orderId: order.id,
-                  }),
-                });
-                const vd = await v.json().catch(() => ({}));
-                if (!v.ok) throw new Error(vd.error || "Payment verification failed.");
+              try {
+                // 2) Online: server se amount lekar Razorpay order banao
+                let paymentResult: {
+                  razorpay_payment_id: string;
+                  razorpay_order_id: string;
+                  razorpay_signature: string;
+                } | null = null;
+
+                if (isOnline) {
+                  const r = await fetch("/api/payments/create-order", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    credentials: "include",
+                    body: JSON.stringify({ orderId: order.id }),
+                  });
+                  const d = await r.json().catch(() => ({}));
+                  if (!r.ok) throw new Error(d.error || "Couldn't start payment.");
+
+                  paymentResult = await openRazorpayCheckout({
+                    keyId: d.keyId,
+                    orderId: d.orderId,
+                    amount: d.amount,
+                    currency: d.currency,
+                    name: form.name,
+                    email: form.email,
+                    phone: form.phone,
+                    description: `Dryfruit Adda order ${order.id}`,
+                  });
+
+                  // 3) Verify — signature + server-to-server amount check
+                  const v = await fetch("/api/payments/verify", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    credentials: "include",
+                    body: JSON.stringify({
+                      ...paymentResult,
+                      orderId: order.id,
+                    }),
+                  });
+                  const vd = await v.json().catch(() => ({}));
+                  if (!v.ok) {
+                    throw new Error(
+                      vd.error ||
+                        "Payment could not be verified. If money was debited, contact support for a refund.",
+                    );
+                  }
+                }
+              } catch (e) {
+                // Payment fail / cancel — order ko pending chhod do, COD fallback
+                // user ko batao. Order DB me pada rahega taaki recovery ho sake.
+                throw e instanceof Error ? e : new Error("Payment failed.");
               }
 
               // Address book save

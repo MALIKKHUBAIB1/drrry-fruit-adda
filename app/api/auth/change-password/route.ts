@@ -35,6 +35,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Current password is wrong." }, { status: 400 });
   if (!ok) return NextResponse.json({ error: "User not found." }, { status: 404 });
   const res = NextResponse.json({ ok: true });
-  res.headers.set("Set-Cookie", "dfa_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0");
+  const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
+  res.headers.set("Set-Cookie", `dfa_session=; Path=/; HttpOnly; SameSite=Lax${secure}; Max-Age=0`);
   return res;
 }

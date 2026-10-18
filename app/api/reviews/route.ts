@@ -32,7 +32,9 @@ export async function GET(req: NextRequest) {
   const me = await getSessionUser(req);
   const myReview = me ? (reviews.find((r) => r.userId === me.id) ?? null) : null;
 
-  return NextResponse.json({ reviews, count, avg, dist, myReview });
+  // userId internal identifier hai — public payload me expose na ho.
+  const pub = reviews.map(({ userId: _omit, ...r }) => r);
+  return NextResponse.json({ reviews: pub, count, avg, dist, myReview: myReview ? { ...myReview, userId: myReview.userId } : null });
 }
 
 // POST /api/reviews { slug, rating, title?, comment } — login required, ek user ka ek review (dobara bhejne par update)

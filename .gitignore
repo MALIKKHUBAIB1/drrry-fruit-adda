@@ -41,3 +41,10 @@ next-env.d.ts
 
 # All-India pincode reference data (city/state/district per PIN)
 data/pincodes.json
+
+# QA / tooling artefacts
+.dev.log
+test-results/
+playwright-report/
+blob-report/
+.playwright/

@@ -2,20 +2,16 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { ArrowRight, Eye, EyeOff, Lock, Mail, ShieldAlert } from "lucide-react";
 import { useAuth } from "@/lib/auth";
-import { cn } from "@/lib/utils";
-
-const DEV = process.env.NODE_ENV !== "production";
-const DEV_EMAIL = "admin@dryfruitadda.in";
-const DEV_PASS = "DFA-KB4aht9Z1Hwq5YJU-2026";
 
 export default function AdminLoginPage() {
   const { user, login, logout } = useAuth();
   const router = useRouter();
-  const [email, setEmail] = useState(DEV ? DEV_EMAIL : "");
-  const [pass, setPass] = useState(DEV ? DEV_PASS : "");
+  // Credentials kabhi client bundle me nahi — sirf user type kare.
+  const [email, setEmail] = useState("");
+  const [pass, setPass] = useState("");
   const [show, setShow] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -30,7 +26,7 @@ export default function AdminLoginPage() {
 
   if (user?.isAdmin) return null;
 
-  const submit = async (e: React.FormEvent) => {
+  const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
       setErr("Enter a valid email address.");
@@ -118,11 +114,6 @@ export default function AdminLoginPage() {
             {err && (
               <p role="alert" className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-2.5 text-sm text-red-200">
                 {err}
-              </p>
-            )}
-            {DEV && (
-              <p className="rounded-xl border border-gold/30 bg-gold/10 px-4 py-2.5 text-xs text-cocoa-foreground/70">
-                Dev mode: credentials pre-filled. Remove before production.
               </p>
             )}
             <button

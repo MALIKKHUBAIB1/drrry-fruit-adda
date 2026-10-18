@@ -1,5 +1,3 @@
-import "server-only";
-
 // ---------- HTML escape (XSS ke liye) ----------
 export function escapeHtml(input: unknown): string {
   if (input == null) return "";
@@ -62,7 +60,9 @@ export function safeSlug(input: unknown): string {
 export function safeUrl(input: unknown): string {
   const s = String(input ?? "").trim();
   if (!s) return "";
-  if (/^(https?:\/\/|\/)/i.test(s) && !/javascript:/i.test(s)) return s.slice(0, 500);
+  if (/^(javascript:|data:|vbscript:)/i.test(s)) return "";
+  if (s.startsWith("//")) return "";
+  if (/^\//.test(s) || /^https?:\/\//i.test(s)) return s.slice(0, 500);
   return "";
 }
 
@@ -81,10 +81,28 @@ export function toFloat(input: unknown, min = 0, max = 1_000_000): number {
 // ---------- Rate limiter (in-memory, per process) ----------
 const buckets = new Map<string, { count: number; resetAt: number }>();
 
+/**
+ * Client IP — X-Forwarded-For spoofing se rate-limit bypass nahi hona chahiye.
+ * XFF client-controlled hai jab tak trusted proxy use na ho, isliye default
+ * me hum XFF IGNORE karte hain aur user/session identity pe throttling karte hain.
+ * TRUST_PROXY=1 set karo sirf tab jab app ke aage pata-bhaya reverse proxy ho.
+ */
+export function clientIp(req: {
+  headers: Headers;
+}, fallback?: string): string {
+  if (process.env.TRUST_PROXY === "1") {
+    const xff = req.headers.get("x-forwarded-for");
+    if (xff) return xff.split(",")[0].trim();
+  }
+  // Browser se aaya hua raw header — spoofable, isliye authenticated routes
+  // me caller `fallback` (userId) deta hai jo spoof nahi ho sakta.
+  return fallback || req.headers.get("x-real-ip") || "unknown";
+}
+
 export function rateLimit(key: string, max: number, windowMs: number): { ok: boolean; remaining: number } {
   const now = Date.now();
   const b = buckets.get(key);
-  if (!b || b.resetAt < now) {
+  if (!b || b.resetAt <= now) {
     buckets.set(key, { count: 1, resetAt: now + windowMs });
     return { ok: true, remaining: max - 1 };
   }

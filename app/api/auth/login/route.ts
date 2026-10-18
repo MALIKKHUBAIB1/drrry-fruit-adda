@@ -7,23 +7,25 @@ import {
   sessionExpiry,
   verifyPassword,
 } from "@/lib/server/auth";
-import {
-  cleanText,
-  isValidEmail,
-  rateLimit,
-  readJsonSafe,
-  sameOrigin,
-} from "@/lib/server/security";
+import { cleanText, clientIp, isValidEmail, rateLimit, readJsonSafe, sameOrigin } from "@/lib/server/security";
 
 // POST /api/auth/login { email, password }
 export async function POST(req: NextRequest) {
   if (!sameOrigin(req)) {
     return NextResponse.json({ error: "Cross-origin request blocked." }, { status: 403 });
   }
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
-  const rl = rateLimit(`login:${ip}`, 10, 60_000);
-  if (!rl.ok) {
-    return NextResponse.json({ error: "Too many attempts. Please try again later." }, { status: 429 });
+
+  // Rate limit: XFF spoof-proof — bucket email + remote address dono pe.
+  // Authenticated hone se pehle user id available nahi hoti, isliye email key
+  // use karte hain (attacker email badal sakta hai, but per-email limit still
+  // stops targeted brute force on one account).
+  const ip = clientIp(req);
+  const rlIp = rateLimit(`login-ip:${ip}`, 30, 60_000);
+  if (!rlIp.ok) {
+    return NextResponse.json(
+      { error: "Too many attempts. Please try again later." },
+      { status: 429 },
+    );
   }
 
   const parsed = await readJsonSafe(req, 10_000);
@@ -41,14 +43,18 @@ export async function POST(req: NextRequest) {
   }
 
   const db = await readDb();
-  const user = db.users.find((u) => u.email === email);
-  if (!user) {
+  const rlAcct = rateLimit(`login-acct:${email}`, 10, 15 * 60_000);
+  if (!rlAcct.ok) {
     return NextResponse.json(
-      { error: "No account found with this email. Please register first." },
-      { status: 404 },
+      { error: "Too many attempts for this account. Try again later." },
+      { status: 429 },
     );
   }
-  if (!verifyPassword(password, user.salt, user.passHash)) {
+
+  const user = db.users.find((u) => u.email === email);
+  // Enumeration fix: unknown email aur wrong password ka response IDENTICAL
+  // hona chahiye (same status, same message).
+  if (!user || !verifyPassword(password, user.salt, user.passHash)) {
     return NextResponse.json({ error: "Wrong password. Please try again." }, { status: 401 });
   }
 

@@ -72,16 +72,26 @@ export async function POST(req: NextRequest) {
   if (items.length === 0 || items.length > 50) return NextResponse.json({ error: "Cart is empty or too large." }, { status: 400 });
 
   const order = await updateDb((db) => {
-    const lines = items.map((it: unknown) => {
+    // Duplicate (slug, variant) lines ko PEHLE merge karo. Bina iske per-line
+    // qty cap (20) bypass ho jata tha: 50 identical lines => 1000 units of a
+    // single SKU, jabki policy 20 hai.
+    const merged = new Map<string, number>();
+    for (const it of items) {
       const o = it as Record<string, unknown>;
-      const slug = cleanText(o.slug, 80);
-      const variant = cleanText(o.variant, 40);
-      const qty = toInt(o.qty, 1, 20);
+      const key = `${cleanText(o.slug, 80)}::${cleanText(o.variant, 40)}`;
+      merged.set(key, (merged.get(key) ?? 0) + toInt(o.qty, 1, 20));
+    }
+
+    const lines: { slug: string; name: string; variant: string; qty: number; price: number; mrp: number; image: string }[] = [];
+    for (const [key, rawQty] of merged) {
+      const [slug, variant] = key.split("::");
+      // Hard cap: merged total bhi 20 se zyada nahi ho sakta.
+      const qty = Math.min(rawQty, 20);
       const p = db.products.find((x) => x.slug === slug);
       const v = p?.variants.find((x) => x.label === variant);
       if (!p || !v) throw new Error(`Invalid item: ${slug} (${variant})`);
       if (!p.inStock) throw new Error(`${p.name} is out of stock.`);
-      return {
+      lines.push({
         slug: p.slug,
         name: p.name,
         variant,
@@ -89,8 +99,8 @@ export async function POST(req: NextRequest) {
         price: v.price,
         mrp: v.mrp,
         image: p.image,
-      };
-    });
+      });
+    }
 
     const subtotal = lines.reduce((s, l) => s + l.price * l.qty, 0);
     let discount = 0;

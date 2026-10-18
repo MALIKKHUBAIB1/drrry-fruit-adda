@@ -1,11 +1,17 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { categories, products as seedProducts, type Product } from "@/lib/products";
-import { hashPassword, newId } from "./crypto";
+import { hashPassword } from "./crypto";
 
 export const ADMIN_EMAIL =
   process.env.ADMIN_EMAIL?.trim().toLowerCase() || "admin@dryfruitadda.in";
-export const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "Admin@123";
+export const DEFAULT_ADMIN_PASSWORD = "Admin@123";
+
+export const ADMIN_PASSWORD =
+  process.env.ADMIN_PASSWORD?.trim() ||
+  (process.env.NODE_ENV === "production" ? (() => {
+    throw new Error("ADMIN_PASSWORD must be set in production. Refusing to use the default fallback.");
+  })() : DEFAULT_ADMIN_PASSWORD);
 
 // Admin password hash ek baar per server-start compute hota hai
 // (har API request par scrypt chalana heavy padega).
@@ -88,6 +94,14 @@ export type DbOrder = {
   paymentId?: string;
   razorpayOrderId?: string;
   paidAt?: string;
+  /** Payment lifecycle — server hi set karta hai, client kabhi nahi. */
+  paymentStatus?: "pending" | "paid" | "failed" | "refunded";
+  /** Razorpay se confirm kiya gaya amount (paise) — audit ke liye */
+  paidAmount?: number;
+  refundId?: string;
+  refundedAt?: string;
+  /** Payment attempts — replay detection */
+  paymentAttempts?: number;
   status: "placed" | "shipped" | "delivered" | "cancelled";
   statusHistory?: { status: DbOrderStatus; at: string; note?: string }[];
   trackingNumber?: string;
@@ -652,7 +666,25 @@ export async function readDb(): Promise<DbShape> {
     } finally {
       cacheInFlight = null;
     }
-  } catch {
+  } catch (err) {
+    // D-6: pehle ka catch SAB kuch pakadta tha aur seed() se REAL database
+    // overwrite kar deta tha — ek corrupt/partial read = saare users, orders,
+    // addresses, coupons permanently gone, zero log, zero alert.
+    //
+    // Ab: corrupt file ho to THROW karo (500 + log). Sirf file genuinely
+    // missing ho (first boot / fresh deploy) tab seed karo.
+    const code = (err as NodeJS.ErrnoException)?.code;
+    if (code !== "ENOENT") {
+      console.error(
+        JSON.stringify({
+          level: "error",
+          msg: "db read failed - NOT seeding, refusing to overwrite existing data",
+          code,
+          path: DB_PATH,
+        }),
+      );
+      throw err;
+    }
     const db = seed();
     await writeDb(db);
     return db;
@@ -662,17 +694,33 @@ export async function readDb(): Promise<DbShape> {
 export async function writeDb(db: DbShape): Promise<void> {
   await fs.mkdir(DB_DIR, { recursive: true });
   // Atomic-ish write: tmp file phir rename
-  const tmp = DB_PATH + ".tmp";
+  // Unique temp name — fixed path pe concurrent writes splice hoti thi (D-5)
+  const tmp = `${DB_PATH}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2, 8)}.tmp`;
   await fs.writeFile(tmp, JSON.stringify(db, null, 2), "utf-8");
   await fs.rename(tmp, DB_PATH);
   invalidateDbCache();
 }
 
+// Read-modify-write ko serialize karta hai. Pehle parallel updateDb calls
+// ek doosre ke writes ko overwrite kar dete the (lost updates) — order/coupon
+// use silently lost ho sakte the (D-1).
+const g = globalThis as unknown as { __dfa_db_lock__?: Promise<unknown> };
+
 export async function updateDb<T>(fn: (db: DbShape) => T | Promise<T>): Promise<T> {
-  const db = await readDb();
-  const out = await fn(db);
-  await writeDb(db);
-  return out;
+  const prev = g.__dfa_db_lock__ ?? Promise.resolve();
+  let release!: () => void;
+  const next = new Promise<void>((r) => (release = r));
+  g.__dfa_db_lock__ = prev.then(() => next);
+  await prev;
+  try {
+    const db = await readDb();
+    const out = await fn(db);
+    await writeDb(db);
+    return out;
+  } finally {
+    release();
+    if (g.__dfa_db_lock__ === next) g.__dfa_db_lock__ = undefined;
+  }
 }
 
 // ---------- Product helpers (DB se) ----------

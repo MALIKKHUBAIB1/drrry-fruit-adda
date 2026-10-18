@@ -8,20 +8,14 @@ import {
   sessionCookie,
   sessionExpiry,
 } from "@/lib/server/auth";
-import {
-  cleanText,
-  isValidEmail,
-  rateLimit,
-  readJsonSafe,
-  sameOrigin,
-} from "@/lib/server/security";
+import { cleanText, clientIp, isValidEmail, rateLimit, readJsonSafe, sameOrigin } from "@/lib/server/security";
 
 // POST /api/auth/register { name, email, password }
 export async function POST(req: Request) {
   if (!sameOrigin(req)) {
     return NextResponse.json({ error: "Cross-origin request blocked." }, { status: 403 });
   }
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+  const ip = clientIp(req);
   const rl = rateLimit(`register:${ip}`, 5, 60_000);
   if (!rl.ok) {
     return NextResponse.json({ error: "Too many attempts. Please try again later." }, { status: 429 });

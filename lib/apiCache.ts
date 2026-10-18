@@ -18,6 +18,16 @@
 
 type Entry = { at: number; data: unknown };
 
+/**
+ * fetch + timeout. Bina timeout ke ek hung request (TCP stall / offline radio)
+ * `inflight` entry ko hamesha ke liye jam deta tha — uske baad har
+ * cachedGet() us stale value par short-circuit ho jata tha (permanently
+ * stale cache). 8s par reject karke entry free karte hain.
+ */
+function fetchWithTimeout(url: string, ms = 8000) {
+  return fetch(url, { signal: AbortSignal.timeout(ms) });
+}
+
 const memory = new Map<string, Entry>();
 const inflight = new Map<string, Promise<unknown>>();
 
@@ -92,7 +102,8 @@ export async function cachedGet<T>(
 
   // ---- bypass: seedha network (mutations ke baad) ----
   if (opts.bypass) {
-    const fresh = (inflight.get(url) ?? fetch(url).then((r) => r.json())) as Promise<T>;
+    const fresh = (inflight.get(url) ??
+      fetchWithTimeout(url).then((r) => r.json())) as Promise<T>;
     inflight.set(url, fresh);
     try {
       const data = await fresh;
@@ -116,25 +127,33 @@ export async function cachedGet<T>(
   }
 
   // ---- stale hit + revalidate: turbat do, peeche refresh karo ----
-  if (hit && opts.revalidate !== false && hit) {
-    fetch(url)
-      .then((r) => r.json())
+  if (hit) {
+    // Asli network promise ko inflight me daalo. Pehle yahan STALE payload ka
+    // resolved promise register hota tha, jisse bypass() network call kiye
+    // bina stale data ko naya timestamp de deta tha (stale-forever bug).
+    const bg = fetchWithTimeout(url)
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
       .then((data) => {
         memory.set(url, { at: Date.now(), data });
         if (isCacheable(url)) writeStorage(url, data);
+        return data;
       })
-      .catch(() => {})
-      .finally(() => inflight.delete(url));
-    inflight.set(
-      url,
-      Promise.resolve(hit.data).catch(() => hit.data),
-    );
+      .finally(() => {
+        if (inflight.get(url) === bg) inflight.delete(url);
+      });
+    inflight.set(url, bg);
     return { data: hit.data as T, fromCache: true };
   }
 
   // ---- cold: network ----
-  const p = fetch(url)
-    .then((r) => r.json())
+  const p = fetchWithTimeout(url)
+    .then((r) => {
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.json();
+    })
     .then((data) => {
       memory.set(url, { at: Date.now(), data });
       if (isCacheable(url)) writeStorage(url, data);
