@@ -1,6 +1,6 @@
 import { categories, products as seedProducts, type Product } from "@/lib/products";
 import { hashPassword } from "./crypto";
-import { mongo, STATE_COLLECTION, type StateDoc } from "./mongo";
+import { mongo } from "./mongo";
 
 export const ADMIN_EMAIL =
   process.env.ADMIN_EMAIL?.trim().toLowerCase() || "admin@dryfruitadda.in";
@@ -639,14 +639,14 @@ function normalize(db: Partial<DbShape>): DbShape {
 //  1. file ka mtime+size check (bahut sasta stat call)
 //  2. same ho to cached object return (zero disk parse)
 //  3. writeDb cache invalidate karta hai
-// ---------- MongoDB persistence ----------
-// Purana JSON-file layer hata diya (data/db.json). Ab state ek hi Atlas
-// document me rehta hai: app_state / { _id: "root", data, __v }.
+// ---------- MongoDB persistence (collection-per-entity) ----------
+// Har array field apni collection me hai, isliye Atlas UI me users/orders/
+// products alag-alag dikhte hain. Jo cheezein array nahi hain (settings,
+// carts, wishlists, hiddenPincodes) `meta` collection ke ek document me hain.
 //
-// `__v` optimistic-concurrency version hai — ek read-modify-write cycle ke
-// beech doosre writer ne likh diya to save() fail karega aur caller retry
-// karega. Pehle ye process-local mutex se hota tha, jo multi-instance deploys
-// me kaam nahi karta tha.
+// `__v` meta document pe hai — optimistic concurrency. Ek read-modify-write
+// cycle ke beech doosre writer ne likh diya to save() throw karega. Pehle ye
+// process-local mutex se hota tha, jo multi-instance deploys me kaam nahi karta.
 
 let cache: { version: number; db: DbShape } | null = null;
 let cacheInFlight: Promise<DbShape> | null = null;
@@ -655,45 +655,78 @@ export function invalidateDbCache() {
   cache = null;
 }
 
-async function stateCol() {
-  const db = await mongo();
-  return db.collection<StateDoc>(STATE_COLLECTION);
-}
+type Row = Record<string, unknown>;
 
-async function loadState(): Promise<DbShape> {
-  const doc = await (await stateCol()).findOne({ _id: "root" as const });
-  if (!doc) {
-    // Fresh DB — pehli baar seed karo. Corrupt/missing ka purana distinction
-    // ab Mongo ke errors ke through aata hai (Mongo pehle hi throw karega).
+async function loadAll(): Promise<{ db: DbShape; version: number }> {
+  const { metaCol, ARRAY_COLLECTIONS, META_ID } = await import("./mongo");
+  const mc = await metaCol();
+
+  const [meta, ...cols] = await Promise.all([
+    mc.findOne({ _id: META_ID }),
+    ...ARRAY_COLLECTIONS.map((n) =>
+      mongo().then((d) => d.collection(n).find({}).toArray()),
+    ),
+  ]);
+
+  if (!meta) {
+    // Fresh install — seed once. Existing data ko kabhi overwrite nahi.
     const fresh = seed();
-    await saveState(fresh, 0);
-    return fresh;
+    await persistAll(fresh, 0);
+    return { db: fresh, version: 1 };
   }
-  return normalize(doc.data as Partial<DbShape>);
+
+  const db = {
+    ...Object.fromEntries(
+      ARRAY_COLLECTIONS.map((n, i) => [n, cols[i] as never]),
+    ),
+    settings: meta.settings,
+    hiddenPincodes: meta.hiddenPincodes ?? [],
+    carts: (meta.carts ?? {}) as DbShape["carts"],
+    wishlists: (meta.wishlists ?? {}) as DbShape["wishlists"],
+  } as unknown as DbShape;
+
+  return { db: normalize(db), version: meta.__v ?? 0 };
 }
 
-async function saveState(db: DbShape, expectedVersion: number): Promise<void> {
-  const col = await stateCol();
+// Sab collections parallel me likhta hai. Pehle sab kuch ek document tha,
+// ab 12 collections — Promise.all se ek round-trip me ho jata hai.
+async function persistAll(db: DbShape, expectedVersion: number): Promise<void> {
+  const { metaCol, ARRAY_COLLECTIONS, META_ID, mongo } = await import("./mongo");
   const next = expectedVersion + 1;
-  const res = await col.replaceOne(
-    { _id: "root" as const },
-    { _id: "root", data: db, __v: next, updatedAt: new Date() },
-    { upsert: true },
+
+  const metaDoc = {
+    _id: META_ID,
+    __v: next,
+    updatedAt: new Date(),
+    settings: db.settings,
+    hiddenPincodes: db.hiddenPincodes ?? [],
+    carts: db.carts ?? {},
+    wishlists: db.wishlists ?? {},
+  };
+
+  // meta pehle likho (version bump), phir data. Agar beech me crash ho to
+  // version aage badla hua hai aur agla read usse dekh lega.
+  await (await metaCol()).replaceOne({ _id: META_ID }, metaDoc, { upsert: true });
+
+  const d = await mongo();
+  await Promise.all(
+    ARRAY_COLLECTIONS.map(async (n) => {
+      const rows = (db[n as keyof DbShape] as unknown[] | undefined) ?? [];
+      const col = d.collection(n);
+      await col.deleteMany({});
+      if (rows.length) await col.insertMany(rows as never[]);
+    }),
   );
-  if (res.matchedCount === 0 && !res.upsertedId) {
-    throw new Error("state save failed: root document missing after upsert");
-  }
+
   cache = { version: next, db };
 }
 
 export async function readDb(): Promise<DbShape> {
-  // Cache hit — doc same version ka
   if (cache) return cache.db;
-
   if (cacheInFlight) return cacheInFlight;
 
-  const promise = loadState().then((db) => {
-    cache = { version: cache?.version ?? 0, db };
+  const promise = loadAll().then(({ db, version }) => {
+    cache = { version, db };
     return db;
   });
   cacheInFlight = promise;
@@ -705,9 +738,9 @@ export async function readDb(): Promise<DbShape> {
 }
 
 export async function writeDb(db: DbShape): Promise<void> {
-  const col = await stateCol();
-  const cur = await col.findOne({ _id: "root" as const });
-  await saveState(db, cur?.__v ?? 0);
+  const { metaCol, META_ID } = await import("./mongo");
+  const cur = await (await metaCol()).findOne({ _id: META_ID });
+  await persistAll(db, cur?.__v ?? 0);
 }
 
 // Read-modify-write ko serialize karta hai. Pehle parallel updateDb calls
@@ -722,23 +755,15 @@ export async function updateDb<T>(fn: (db: DbShape) => T | Promise<T>): Promise<
   g.__dfa_db_lock__ = prev.then(() => next);
   await prev;
   try {
-    const col = await stateCol();
-    const cur = await col.findOne({ _id: "root" as const });
-    const db = cur
-      ? normalize(cur.data as Partial<DbShape>)
-      : (() => {
-          const fresh = seed();
-          return fresh;
-        })();
+    const { db, version } = await loadAll();
     const out = await fn(db);
-    await saveState(db, cur?.__v ?? 0);
+    await persistAll(db, version);
     return out;
   } finally {
     release();
     if (g.__dfa_db_lock__ === next) g.__dfa_db_lock__ = undefined;
   }
 }
-
 // ---------- Product helpers (DB se) ----------
 
 export async function getProducts() {

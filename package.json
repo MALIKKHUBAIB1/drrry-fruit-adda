@@ -20,7 +20,10 @@
     "typecheck": "tsc --noEmit",
     "qa": "bash scripts/qa-gate.sh",
     "db:migrate": "node scripts/migrate-json-to-mongo.mjs",
-    "db:migrate:write": "node scripts/migrate-json-to-mongo.mjs --write"
+    "db:migrate:write": "node scripts/migrate-json-to-mongo.mjs --write",
+    "db:split": "node scripts/migrate-split-collections.mjs",
+    "db:split:write": "node scripts/migrate-split-collections.mjs --write",
+    "db:indexes": "node scripts/create-indexes.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

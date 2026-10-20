@@ -29,22 +29,61 @@ export function mongo(): Promise<Db> {
   return dbPromise;
 }
 
-export const STATE_COLLECTION = "app_state";
-export const ROOT_ID = "root";
+// ---------- Collection-per-entity ----------
+// Har array field apni collection me rehta hai (Atlas UI me alag-alag dikhti
+// hain). Jo cheezein array nahi hain (settings, carts, wishlists, hidden
+// pincode list) wo `meta` collection ke ek document me hain, aur wahi
+// optimistic-concurrency version (__v) bhi track karta hai.
+export const META_ID = "root";
 
-// Whole-app state ek hi document me (read-modify-write contract preserve karne
-// ke liye). `__v` optimistic-concurrency version hai — lost updates rokta hai.
-export type StateDoc = Document & {
-  _id: typeof ROOT_ID;
-  data: unknown;
+// DbShape ka array field -> collection name
+export const ARRAY_COLLECTIONS = [
+  "users",
+  "sessions",
+  "products",
+  "categories",
+  "hampers",
+  "coupons",
+  "pincodes",
+  "orders",
+  "contacts",
+  "reviews",
+  "addresses",
+  "newsletter",
+] as const;
+
+export type ArrayCollectionName = (typeof ARRAY_COLLECTIONS)[number];
+
+export type MetaDoc = Document & {
+  _id: typeof META_ID;
   __v: number;
   updatedAt: Date;
+  settings: unknown;
+  hiddenPincodes: string[];
+  carts: Record<string, unknown[]>;
+  wishlists: Record<string, string[]>;
 };
+
+export async function metaCol() {
+  const db = await mongo();
+  return db.collection<MetaDoc>("meta");
+}
+
+export function arrayCol(name: ArrayCollectionName) {
+  return mongo().then((db) => db.collection<Document>(name));
+}
 
 export async function ensureIndexes() {
   const db = await mongo();
-  const state = db.collection<StateDoc>(STATE_COLLECTION);
-  await state.createIndex({ updatedAt: -1 });
+  // Uniqueness — duplicate records rokta hai aur Atlas UI me bhi clear rehta hai
+  await db.collection("users").createIndex({ email: 1 }, { unique: true });
+  await db.collection("users").createIndex({ id: 1 }, { unique: true });
+  await db.collection("products").createIndex({ slug: 1 }, { unique: true });
+  await db.collection("orders").createIndex({ id: 1 }, { unique: true });
+  await db.collection("orders").createIndex({ userId: 1 });
+  await db.collection("sessions").createIndex({ token: 1 }, { unique: true });
+  await db.collection("reviews").createIndex({ slug: 1 });
+  await db.collection("meta").createIndex({ updatedAt: -1 });
 }
 
 export async function closeMongo() {
