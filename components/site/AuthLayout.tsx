@@ -14,7 +14,7 @@ export function AuthLayout({
   switchLink,
   switchLabel,
   switchSearch,
-  image = "/images/hero.jpg",
+  image = "https://ik.imagekit.io/kjm6lzdqi/dryfruitadda/products/hero_PHRF6HPzu.jpg",
 }: {
   eyebrow: string;
   title: string;
@@ -49,7 +49,7 @@ export function AuthLayout({
             <div className="absolute inset-0 bg-gradient-to-b from-cocoa/60 via-cocoa/80 to-cocoa" />
             <div className="relative flex items-center gap-3">
               <img
-                src="/images/logo-sm.jpg"
+                src="https://ik.imagekit.io/kjm6lzdqi/dryfruitadda/products/logo-sm_8aov28_Ti.jpg"
                 alt="Dryfruit Adda"
                 className="h-12 w-12 rounded-full ring-1 ring-gold"
               />

@@ -9,7 +9,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "About Dryfruit Adda",
     description: "Premium, handpicked dry fruits for every occasion.",
-    images: [{ url: "/images/hero.jpg", width: 1200, height: 630, alt: "Dryfruit Adda" }],
+    images: [{ url: "https://ik.imagekit.io/kjm6lzdqi/dryfruitadda/products/hero_PHRF6HPzu.jpg", width: 1200, height: 630, alt: "Dryfruit Adda" }],
   },
 };
 
@@ -95,7 +95,7 @@ export default function About() {
       {/* Hero */}
       <section className="relative overflow-hidden bg-cocoa">
         <img
-          src="/images/hero.jpg"
+          src="https://ik.imagekit.io/kjm6lzdqi/dryfruitadda/products/hero_PHRF6HPzu.jpg"
           alt="Brass bowls of almonds, cashews, pistachios and dates"
           className="absolute inset-0 h-full w-full object-cover object-right opacity-40"
         />
@@ -164,13 +164,13 @@ export default function About() {
       <section className="mx-auto grid max-w-6xl items-center gap-12 px-4 py-20 sm:py-28 lg:grid-cols-2">
         <div className="grid grid-cols-2 gap-4">
           <img
-            src="/images/mixed.jpg"
+            src="https://ik.imagekit.io/kjm6lzdqi/dryfruitadda/products/mixed_Cb6n5_mP1.jpg"
             alt="Mixed dry fruits"
             loading="lazy"
             className="aspect-[3/4] w-full rounded-2xl border border-gold/30 object-cover shadow-xl"
           />
           <img
-            src="/images/gift.jpg"
+            src="https://ik.imagekit.io/kjm6lzdqi/dryfruitadda/products/gift_JYpveUrx4.jpg"
             alt="Signature gift box"
             loading="lazy"
             className="mt-10 aspect-[3/4] w-full rounded-2xl border border-gold/30 object-cover shadow-xl"
@@ -260,7 +260,7 @@ export default function About() {
         </ol>
         <div className="mt-8 overflow-hidden rounded-xl border border-gold/30">
           <img
-            src="/images/almonds.jpg"
+            src="https://ik.imagekit.io/kjm6lzdqi/dryfruitadda/products/almonds_UOTtyTDyL.jpg"
             alt="Premium California almonds"
             loading="lazy"
             className="h-56 w-full object-cover sm:h-72"

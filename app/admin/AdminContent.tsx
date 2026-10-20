@@ -8,6 +8,8 @@ import { useAuth } from "@/lib/auth";
 import { bustCache } from "@/lib/apiCache";
 import { categories, inr, DEFAULT_DELIVERY_OPTIONS, etaLabel } from "@/lib/products";
 import { cn } from "@/lib/utils";
+import ImageUploadButton from "@/components/admin/ImageUploadButton";
+import HeroBannerEditor from "@/components/admin/HeroBannerEditor";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, PieChart, Pie, Cell, Legend, LineChart, Line } from "recharts";
 
 async function j(path: string, init?: RequestInit) {
@@ -111,7 +113,7 @@ export default function AdminContent() {
           {tab === "Products" && "Manage catalogue, price and stock."}
           {tab === "Categories" && "Shop-by-category tiles on the home page."}
           {tab === "Gift Hampers" && "Curated gift hampers with multiple items."}
-          {tab === "Promo Banner" && "Home page offer banner with live countdown."}
+          {tab === "Promo Banner" && "Hero banner + offer banner with live countdown, both on the home page."}
           {tab === "Pincodes" && "Pincode-wise delivery charges across India."}
           {tab === "Coupons" && "Create and manage discount codes."}
           {tab === "Users" && "Customers and admin access."}
@@ -135,7 +137,10 @@ export default function AdminContent() {
         {tab === "Categories" && <CategoriesTab cats={cats} reload={load} />}
         {tab === "Gift Hampers" && <HampersTab hampers={hampers} reload={load} />}
         {tab === "Promo Banner" && (
-          <PromoTab promo={promo} announcements={announcements} reload={load} />
+          <div className="space-y-5">
+            <HeroBannerEditor />
+            <PromoTab promo={promo} announcements={announcements} reload={load} />
+          </div>
         )}
         {tab === "Pincodes" && <PincodesTab reload={load} />}
         {tab === "Coupons" && <CouponsTab coupons={coupons} reload={load} />}
@@ -638,8 +643,8 @@ const blankForm = (): ProductForm => ({
   name: "",
   category: categories[0]?.slug ?? "almonds",
   group: "dry-fruits",
-  image: "/images/mixed.jpg",
-  images: ["/images/mixed.jpg"],
+  image: "https://ik.imagekit.io/kjm6lzdqi/dryfruitadda/products/mixed_Cb6n5_mP1.jpg",
+  images: ["https://ik.imagekit.io/kjm6lzdqi/dryfruitadda/products/mixed_Cb6n5_mP1.jpg"],
   rating: "4.5",
   badge: "",
   inStock: true,
@@ -750,7 +755,7 @@ function ProductsTab({ products, cats, reload }: { products: any[]; cats: any[];
           name: form.name.trim(),
           category: form.category,
           group: form.group,
-          image: (form.images.find((x) => x.trim()) ?? form.image).trim() || "/images/mixed.jpg",
+          image: (form.images.find((x) => x.trim()) ?? form.image).trim() || "https://ik.imagekit.io/kjm6lzdqi/dryfruitadda/products/mixed_Cb6n5_mP1.jpg",
           images: form.images.map((x) => x.trim()).filter(Boolean),
           rating: Math.min(5, Math.max(0, Number(form.rating) || 0)),
           badge: form.badge || undefined,
@@ -862,9 +867,9 @@ function ProductsTab({ products, cats, reload }: { products: any[]; cats: any[];
                       {i + 1}
                     </span>
                     <img
-                      src={src || "/images/mixed.jpg"}
+                      src={src || "https://ik.imagekit.io/kjm6lzdqi/dryfruitadda/products/mixed_Cb6n5_mP1.jpg"}
                       alt=""
-                      onError={(e) => ((e.target as HTMLImageElement).src = "/images/mixed.jpg")}
+                      onError={(e) => ((e.target as HTMLImageElement).src = "https://ik.imagekit.io/kjm6lzdqi/dryfruitadda/products/mixed_Cb6n5_mP1.jpg")}
                       className="h-12 w-12 shrink-0 rounded-md border border-border object-cover"
                     />
                     <input
@@ -872,9 +877,16 @@ function ProductsTab({ products, cats, reload }: { products: any[]; cats: any[];
                       onChange={(e) =>
                         set({ images: editor.form.images.map((x, j) => (j === i ? e.target.value : x)) })
                       }
-                      placeholder="/images/almonds.jpg"
+                      placeholder="https://ik.imagekit.io/kjm6lzdqi/dryfruitadda/products/almonds_UOTtyTDyL.jpg"
                       aria-label={`Image ${i + 1} URL`}
                       className={`${F} font-mono`}
+                    />
+                    <ImageUploadButton
+                      onUploaded={(url) =>
+                        set({ images: editor.form.images.map((x, j) => (j === i ? url : x)) })
+                      }
+                      category={editor.form.category}
+                      label="File"
                     />
                     <span className="flex shrink-0 gap-1">
                       <button
@@ -933,7 +945,7 @@ function ProductsTab({ products, cats, reload }: { products: any[]; cats: any[];
                 </button>
               </div>
               <p className="mt-1.5 text-xs text-muted-foreground">
-                Available files: /images/almonds.jpg, cashews.jpg, pistachios.jpg, walnuts.jpg,
+                Available files: https://ik.imagekit.io/kjm6lzdqi/dryfruitadda/products/almonds_UOTtyTDyL.jpg, cashews.jpg, pistachios.jpg, walnuts.jpg,
                 dates.jpg, figs.jpg, raisins.jpg, mixed.jpg, seeds.jpg, gift.jpg
               </p>
             </div>
@@ -1347,14 +1359,14 @@ function CategoriesTab({ cats, reload }: { cats: any[]; reload: () => void }) {
           </label>
           <label className="text-sm font-medium">
             <span className="text-xs uppercase tracking-wider text-muted-foreground">Image URL</span>
-            <input value={image} onChange={(e) => setImage(e.target.value)} placeholder="/images/mixed.jpg" className={`${F} mt-1.5 font-mono`} />
+            <span className="mt-1.5 flex items-center gap-2"><input value={image} onChange={(e) => setImage(e.target.value)} placeholder="https://ik.imagekit.io/kjm6lzdqi/dryfruitadda/products/mixed_Cb6n5_mP1.jpg" className={`${F} font-mono`} /><ImageUploadButton onUploaded={(url) => setImage(url)} category={name || slug} /></span>
           </label>
         </div>
         {(image || editing?.image) && (
           <img
             src={image || editing.image}
             alt=""
-            onError={(e) => ((e.target as HTMLImageElement).src = "/images/mixed.jpg")}
+            onError={(e) => ((e.target as HTMLImageElement).src = "https://ik.imagekit.io/kjm6lzdqi/dryfruitadda/products/mixed_Cb6n5_mP1.jpg")}
             className="h-16 w-16 rounded-lg border border-border object-cover"
           />
         )}
@@ -1378,7 +1390,7 @@ function CategoriesTab({ cats, reload }: { cats: any[]; reload: () => void }) {
       <ul className="grid gap-2 sm:grid-cols-2">
         {cats.map((c) => (
           <li key={c.slug} className="flex items-center gap-3 rounded-xl border border-border bg-card p-3 text-sm">
-            <img src={c.image} alt="" loading="lazy" onError={(e) => ((e.target as HTMLImageElement).src = "/images/mixed.jpg")} className="h-11 w-11 rounded-lg border border-border object-cover" />
+            <img src={c.image} alt="" loading="lazy" onError={(e) => ((e.target as HTMLImageElement).src = "https://ik.imagekit.io/kjm6lzdqi/dryfruitadda/products/mixed_Cb6n5_mP1.jpg")} className="h-11 w-11 rounded-lg border border-border object-cover" />
             <span className="min-w-0 flex-1">
               <b>{c.name}</b>
               <span className="block truncate font-mono text-xs text-muted-foreground">
@@ -1575,7 +1587,7 @@ function HampersTab({ hampers, reload }: { hampers: any[]; reload: () => void })
 
   const list = hampers.filter((h) => !q || `${h.name} ${h.slug}`.toLowerCase().includes(q.toLowerCase()));
 
-  const blank = { slug: "", name: "", image: "/images/gift.jpg", description: "", highlights: [""], price: "", mrp: "", rating: "4.9", badge: "", inStock: true, items: [{ slug: "", name: "", qty: "1" }], metaTitle: "", metaDescription: "" };
+  const blank = { slug: "", name: "", image: "https://ik.imagekit.io/kjm6lzdqi/dryfruitadda/products/gift_JYpveUrx4.jpg", description: "", highlights: [""], price: "", mrp: "", rating: "4.9", badge: "", inStock: true, items: [{ slug: "", name: "", qty: "1" }], metaTitle: "", metaDescription: "" };
 
   const openNew = () => { setErr(null); setEditor({ isNew: true, slugTouched: false, form: { ...blank } }); };
   const openEdit = (h: any) => {
@@ -1612,7 +1624,7 @@ function HampersTab({ hampers, reload }: { hampers: any[]; reload: () => void })
     setBusy(true); setErr(null);
     try {
       await j("/api/admin/hampers", { method: editor.isNew ? "POST" : "PUT", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ slug: f.slug.trim(), name: f.name.trim(), image: f.image.trim() || "/images/gift.jpg", description: f.description.trim(),
+        body: JSON.stringify({ slug: f.slug.trim(), name: f.name.trim(), image: f.image.trim() || "https://ik.imagekit.io/kjm6lzdqi/dryfruitadda/products/gift_JYpveUrx4.jpg", description: f.description.trim(),
           highlights: f.highlights.map((h: string) => h.trim()).filter(Boolean), price: Number(f.price), mrp: Number(f.mrp),
           rating: Number(f.rating) || 4.9, badge: f.badge || undefined, inStock: f.inStock, items,
           metaTitle: f.metaTitle.trim(), metaDescription: f.metaDescription.trim() }) });
@@ -1643,7 +1655,7 @@ function HampersTab({ hampers, reload }: { hampers: any[]; reload: () => void })
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="text-sm font-medium"><span className={L}>Hamper name *</span><input value={editor.form.name} onChange={(e) => setName(e.target.value)} required placeholder="e.g. Festive Gold Hamper" className={`${F} mt-1.5`} /></label>
             <label className="text-sm font-medium"><span className={L}>Slug (URL) *</span><input value={editor.form.slug} onChange={(e) => setEditor((ed: any) => (ed ? { ...ed, slugTouched: true, form: { ...ed.form, slug: e.target.value } } : ed))} required placeholder="festive-gold-hamper" className={`${F} mt-1.5 font-mono`} /></label>
-            <label className="text-sm font-medium sm:col-span-2"><span className={L}>Image URL</span><span className="mt-1.5 flex items-center gap-3"><img src={editor.form.image || "/images/gift.jpg"} alt="" onError={(e) => ((e.target as HTMLImageElement).src = "/images/gift.jpg")} className="h-14 w-14 shrink-0 rounded-md border border-border object-cover" /><input value={editor.form.image} onChange={(e) => set({ image: e.target.value })} placeholder="/images/gift.jpg" className={`${F} font-mono`} /></span></label>
+            <label className="text-sm font-medium sm:col-span-2"><span className={L}>Image URL</span><span className="mt-1.5 flex items-center gap-3"><img src={editor.form.image || "https://ik.imagekit.io/kjm6lzdqi/dryfruitadda/products/gift_JYpveUrx4.jpg"} alt="" onError={(e) => ((e.target as HTMLImageElement).src = "https://ik.imagekit.io/kjm6lzdqi/dryfruitadda/products/gift_JYpveUrx4.jpg")} className="h-14 w-14 shrink-0 rounded-md border border-border object-cover" /><input value={editor.form.image} onChange={(e) => set({ image: e.target.value })} placeholder="https://ik.imagekit.io/kjm6lzdqi/dryfruitadda/products/gift_JYpveUrx4.jpg" className={`${F} font-mono`} /><ImageUploadButton onUploaded={(url) => set({ image: url })} category={editor.form.category} /></span></label>
             <label className="text-sm font-medium"><span className={L}>Price (₹) *</span><input value={editor.form.price} onChange={(e) => set({ price: e.target.value })} inputMode="numeric" required placeholder="1499" className={`${F} mt-1.5`} /></label>
             <label className="text-sm font-medium"><span className={L}>MRP (₹) *</span><input value={editor.form.mrp} onChange={(e) => set({ mrp: e.target.value })} inputMode="numeric" required placeholder="1799" className={`${F} mt-1.5`} /></label>
             <label className="text-sm font-medium"><span className={L}>Rating (0–5)</span><input value={editor.form.rating} onChange={(e) => set({ rating: e.target.value })} type="number" min={0} max={5} step={0.1} className={`${F} mt-1.5`} /></label>
@@ -1699,7 +1711,7 @@ function HampersTab({ hampers, reload }: { hampers: any[]; reload: () => void })
       <ul className="space-y-2">
         {list.map((h) => (
           <li key={h.slug} className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card p-3 text-sm">
-            <img src={h.image} alt="" loading="lazy" onError={(e) => ((e.target as HTMLImageElement).src = "/images/gift.jpg")} className="h-10 w-10 rounded-md border border-border object-cover" />
+            <img src={h.image} alt="" loading="lazy" onError={(e) => ((e.target as HTMLImageElement).src = "https://ik.imagekit.io/kjm6lzdqi/dryfruitadda/products/gift_JYpveUrx4.jpg")} className="h-10 w-10 rounded-md border border-border object-cover" />
             <span className="min-w-0 flex-1"><b>{h.name}</b><span className="block truncate text-xs text-muted-foreground">{h.slug} · ₹{h.price} (MRP ₹{h.mrp}) · {h.items?.length ?? 0} items</span></span>
             <button onClick={() => toggleStock(h)} className={cn("rounded-full px-3 py-1 text-xs font-medium", h.inStock ? "bg-primary/10 text-primary" : "bg-destructive/10 text-destructive")}>{h.inStock ? "In stock" : "Out of stock"}</button>
             <button onClick={() => openEdit(h)} className="rounded-md border border-input px-3 py-1 text-xs hover:border-gold">Edit</button>

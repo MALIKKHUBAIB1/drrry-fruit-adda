@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
 
   const name = cleanText(body.name, 60);
   const slug = slugify(String(body.slug ?? "") || name);
-  const image = cleanText(body.image, 500) || "/images/mixed.jpg";
+  const image = cleanText(body.image, 500) || "https://ik.imagekit.io/kjm6lzdqi/dryfruitadda/products/mixed_Cb6n5_mP1.jpg";
   if (name.length < 2) return NextResponse.json({ error: "Category name required." }, { status: 400 });
   if (!slug) return NextResponse.json({ error: "Valid slug required." }, { status: 400 });
 

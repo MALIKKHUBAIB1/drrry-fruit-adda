@@ -10,7 +10,7 @@ export const siteUrl =
 export const absUrl = (path: string) =>
   path.startsWith("http") ? path : `${siteUrl}${path.startsWith("/") ? path : `/${path}`}`;
 
-export const DEFAULT_OG_IMAGE = "/images/hero.jpg";
+export const DEFAULT_OG_IMAGE = "https://ik.imagekit.io/kjm6lzdqi/dryfruitadda/products/hero_PHRF6HPzu.jpg";
 
 export const SITE_KEYWORDS = [
   "dry fruits",

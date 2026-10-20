@@ -16,7 +16,7 @@ function validateHamper(body: Record<string, unknown>, isNew: boolean) {
     ? String(body.slug).toLowerCase().trim().replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80)
     : "";
   const name = cleanText(body.name, 120);
-  const image = cleanText(body.image, 500) || "/images/gift.jpg";
+  const image = cleanText(body.image, 500) || "https://ik.imagekit.io/kjm6lzdqi/dryfruitadda/products/gift_JYpveUrx4.jpg";
   const description = cleanText(body.description, 2000);
   const highlights = Array.isArray(body.highlights)
     ? body.highlights.map((h) => cleanText(h, 120)).filter(Boolean).slice(0, 8)

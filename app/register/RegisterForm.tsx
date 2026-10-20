@@ -33,7 +33,7 @@ export default function RegisterForm() {
       switchLink="/login"
       switchLabel="Login"
       switchSearch={redirect ? { redirect } : undefined}
-      image="/images/gift.jpg"
+      image="https://ik.imagekit.io/kjm6lzdqi/dryfruitadda/products/gift_JYpveUrx4.jpg"
     >
       <form
         noValidate

@@ -11,7 +11,7 @@ function validateProduct(body: Record<string, unknown>, isNew: boolean) {
   const name = cleanText(body.name, 120);
   const category = cleanText(body.category, 40);
   const group = cleanText(body.group, 20);
-  const image = cleanText(body.image, 500) || "/images/mixed.jpg";
+  const image = cleanText(body.image, 500) || "https://ik.imagekit.io/kjm6lzdqi/dryfruitadda/products/mixed_Cb6n5_mP1.jpg";
   const images = Array.isArray(body.images)
     ? body.images.map((i) => cleanText(i, 500)).filter(Boolean).slice(0, 8)
     : [];

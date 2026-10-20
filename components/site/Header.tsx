@@ -94,7 +94,7 @@ export function Header({ announcements }: { announcements?: string[] }) {
           </button>
           <Link href="/" className="flex shrink-0 items-center gap-2">
             <img
-              src="/images/logo-sm.jpg"
+              src="https://ik.imagekit.io/kjm6lzdqi/dryfruitadda/products/logo-sm_8aov28_Ti.jpg"
               alt="Dryfruit Adda"
               width={48}
               height={48}

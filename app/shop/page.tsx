@@ -9,7 +9,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Shop | Dryfruit Adda",
     description: "Browse our full collection of premium dry fruits and gift hampers.",
-    images: [{ url: "/images/hero.jpg", width: 1200, height: 630, alt: "Dryfruit Adda collection" }],
+    images: [{ url: "https://ik.imagekit.io/kjm6lzdqi/dryfruitadda/products/hero_PHRF6HPzu.jpg", width: 1200, height: 630, alt: "Dryfruit Adda collection" }],
   },
 };
 

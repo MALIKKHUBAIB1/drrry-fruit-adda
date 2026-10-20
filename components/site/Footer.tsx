@@ -7,7 +7,7 @@ export function Footer() {
     <footer className="bg-cocoa text-cocoa-foreground">
       <div className="mx-auto grid max-w-7xl gap-10 px-4 py-14 sm:grid-cols-2 lg:grid-cols-4">
         <div>
-          <img src="/images/logo-sm.jpg" alt="Dryfruit Adda" width={72} height={72} className="h-18 w-18 rounded-full ring-1 ring-gold" loading="lazy" />
+          <img src="https://ik.imagekit.io/kjm6lzdqi/dryfruitadda/products/logo-sm_8aov28_Ti.jpg" alt="Dryfruit Adda" width={72} height={72} className="h-18 w-18 rounded-full ring-1 ring-gold" loading="lazy" />
           <p className="mt-4 text-sm leading-relaxed text-cocoa-foreground/75">Handpicked premium dry fruits, nuts and gift hampers — luxury in every bite, delivered across India.</p>
           <div className="mt-4 flex gap-3 text-gold">
             <a href="#" aria-label="Instagram"><Instagram className="h-5 w-5" /></a>

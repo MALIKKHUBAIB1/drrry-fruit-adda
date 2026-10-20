@@ -161,6 +161,19 @@ export type DbPincode = {
 export type DbSettings = {
   // Top ticker bar ke messages — admin se editable
   announcements: string[];
+  // Home page hero banner — admin se editable
+  hero: {
+    enabled: boolean;
+    eyebrow: string;
+    titleLine1: string;
+    titleLine2: string; // gold italic line
+    subtitle: string;
+    ctaLabel: string;
+    ctaHref: string;
+    cta2Label: string; // "" = second button hide
+    cta2Href: string;
+    image: string;
+  };
   promo: {
     enabled: boolean;
     title: string;
@@ -265,7 +278,7 @@ function seedHampers(): DbHamper[] {
       id: "H-PREMIUM-GIFT-BOX",
       slug: "premium-gift-box",
       name: "Signature Dry Fruit Gift Box",
-      image: "/images/gift.jpg",
+      image: "https://ik.imagekit.io/kjm6lzdqi/dryfruitadda/products/gift_JYpveUrx4.jpg",
       description: "Almonds, cashews, pistachios and dates in an elegant gold-accented keepsake box.",
       highlights: ["Four premium varieties", "Gold-foil keepsake box", "Ideal for festivals & corporate gifting"],
       price: 1499,
@@ -293,6 +306,19 @@ function seedSettings(): DbSettings {
       "Special Offers on Premium Gift Boxes",
       "Free Shipping on Orders Above ₹999",
     ],
+    hero: {
+      enabled: true,
+      eyebrow: "The Luxury Collection",
+      titleLine1: "Nature\u2019s Finest.",
+      titleLine2: "Luxury in Every Bite.",
+      subtitle:
+        "Discover handpicked premium dry fruits, wholesome nuts, and exquisite gift collections crafted for every occasion.",
+      ctaLabel: "Shop Now",
+      ctaHref: "/shop",
+      cta2Label: "Explore Gift Hampers",
+      cta2Href: "/shop?group=gift-hampers",
+      image: "https://ik.imagekit.io/kjm6lzdqi/dryfruitadda/2026/site/hero_WaMyjGPwQ.jpg",
+    },
     promo: {
       enabled: true,
       title: "Special Offers on Premium Gift Boxes",

@@ -28,6 +28,7 @@ export async function PUT(req: NextRequest) {
   if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
   const body = (parsed.data ?? {}) as Record<string, unknown>;
   const promo = (body.promo ?? {}) as Record<string, unknown>;
+  const hero = (body.hero ?? null) as Record<string, unknown> | null;
 
   // Ticker announcements — array ya single string dono accept
   const rawAnn = body.announcements;
@@ -59,6 +60,22 @@ export async function PUT(req: NextRequest) {
     if (typeof promo.ctaHref === "string") p.ctaHref = cleanText(promo.ctaHref, 200);
     if (typeof promo.bgColor === "string" && /^#[0-9a-fA-F]{6}$/.test(promo.bgColor)) {
       p.bgColor = promo.bgColor;
+    }
+
+    // Hero banner — poora object aata hai (partial nahi) taaki ek field
+    // galat na ho jaye. Image URL bhi validate.
+    if (hero) {
+      const h = db.settings.hero;
+      if (typeof hero.enabled === "boolean") h.enabled = hero.enabled;
+      if (typeof hero.eyebrow === "string") h.eyebrow = cleanText(hero.eyebrow, 60);
+      if (typeof hero.titleLine1 === "string") h.titleLine1 = cleanText(hero.titleLine1, 60);
+      if (typeof hero.titleLine2 === "string") h.titleLine2 = cleanText(hero.titleLine2, 60);
+      if (typeof hero.subtitle === "string") h.subtitle = cleanText(hero.subtitle, 220);
+      if (typeof hero.ctaLabel === "string") h.ctaLabel = cleanText(hero.ctaLabel, 30);
+      if (typeof hero.ctaHref === "string") h.ctaHref = cleanText(hero.ctaHref, 200);
+      if (typeof hero.cta2Label === "string") h.cta2Label = cleanText(hero.cta2Label, 30);
+      if (typeof hero.cta2Href === "string") h.cta2Href = cleanText(hero.cta2Href, 200);
+      if (typeof hero.image === "string") h.image = cleanText(hero.image, 500);
     }
     return db.settings;
   });
