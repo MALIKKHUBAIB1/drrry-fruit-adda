@@ -309,8 +309,22 @@ function seedSettings(): DbSettings {
     },
   };
 }
+// Demo password ka hash+salt ek baar compute hota hai (jaise adminCreds()).
+// seedUsers() har writeDb() -> normalize() call pe chalta hai, aur scryptSync
+// ~83ms blocking hai — isliye memoize zaroori hai.
+let cachedDemoSalt = "";
+let cachedDemoHash = "";
+function demoCreds() {
+  if (!cachedDemoSalt) {
+    const { salt, hash } = hashPassword("Demo@123");
+    cachedDemoSalt = salt;
+    cachedDemoHash = hash;
+  }
+  return { salt: cachedDemoSalt, hash: cachedDemoHash };
+}
+
 function seedUsers(): DbUser[] {
-  const { salt, hash } = hashPassword("Demo@123");
+  const { salt, hash } = demoCreds();
   const now = Date.now();
   const day = 24 * 60 * 60 * 1000;
   const mk = (id: string, name: string, email: string, daysAgo: number): DbUser => ({
