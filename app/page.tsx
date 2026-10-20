@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Award, Headphones, Leaf, Package, ShieldCheck, Truck } from "lucide-react";
 import { NewsletterForm } from "@/components/site/Newsletter";
-import { BestSellers, CategoriesGrid, HomeTestimonials, NewArrivals } from "@/components/site/HomeSections";
+import { BestSellers, CategoriesGrid, GiftHampers, HomeTestimonials, NewArrivals } from "@/components/site/HomeSections";
 import { PromoBanner } from "@/components/site/PromoBanner";
 import { DEFAULT_OG_IMAGE, SITE_DESCRIPTION, SITE_NAME, SITE_TAGLINE } from "@/lib/seo";
 import { readDb } from "@/lib/server/db";
@@ -124,6 +124,17 @@ export default async function Home() {
             <h2 className="mt-3 text-5xl font-semibold text-cocoa-foreground">Make Every Celebration <em className="text-gold">Golden.</em></h2>
             <p className="mt-5 text-lg text-cocoa-foreground/75">Thoughtfully curated dry-fruit hampers for festivals, weddings, corporate gifting, and special moments.</p>
             <Link href="/shop?group=gift-hampers" className="mt-8 inline-block rounded-md bg-gold px-7 py-3.5 text-sm font-medium uppercase tracking-widest text-cocoa">Explore Gift Hampers</Link>
+          </div>
+        </div>
+      </section>
+
+      {/* Gift hampers */}
+      <section className="bg-secondary py-20">
+        <div className="mx-auto max-w-7xl px-4">
+          <Heading eyebrow="Curated Gifting" title="Gift Hampers" />
+          <GiftHampers />
+          <div className="mt-10 text-center">
+            <Link href="/shop?group=gift-hampers" className="inline-block border-b border-primary pb-1 text-sm uppercase tracking-widest text-primary">View all gift hampers</Link>
           </div>
         </div>
       </section>

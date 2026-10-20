@@ -103,6 +103,29 @@ export function HomeTestimonials() {
  * horizontal snap-scroll rail (agla card dikhta rehta hai),
  * desktop par arrow buttons, har card par "NEW" ribbon + rank number.
  */
+export function GiftHampers() {
+  // Gift hamper products (group = "gift-hampers"). ProductCard use karte hain
+  // taaki add-to-cart, wishlist aur product links sab waise hi kaam karein
+  // jaise baaki sections me.
+  const { products } = useCatalog();
+  const src = products.length ? products : fallbackProducts;
+
+  const list = useMemo(
+    () => src.filter((p) => p.group === "gift-hampers").slice(0, 4),
+    [src],
+  );
+
+  if (!list.length) return null;
+
+  return (
+    <div className="grid grid-cols-2 gap-3 sm:gap-6 lg:grid-cols-4">
+      {list.map((p) => (
+        <ProductCard key={p.slug} p={p} />
+      ))}
+    </div>
+  );
+}
+
 export function NewArrivals() {
   const rail = useRef<HTMLDivElement>(null);
   // Shared catalog se — pehle ye bhi apna /api/products call karta tha
