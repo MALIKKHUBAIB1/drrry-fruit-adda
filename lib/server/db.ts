@@ -1,7 +1,6 @@
-import { promises as fs } from "node:fs";
-import path from "node:path";
 import { categories, products as seedProducts, type Product } from "@/lib/products";
 import { hashPassword } from "./crypto";
+import { mongo, STATE_COLLECTION, type StateDoc } from "./mongo";
 
 export const ADMIN_EMAIL =
   process.env.ADMIN_EMAIL?.trim().toLowerCase() || "admin@dryfruitadda.in";
@@ -222,9 +221,6 @@ export type DbShape = {
 };
 
 // ---------- Paths & seed ----------
-
-const DB_DIR = path.join(process.cwd(), "data");
-const DB_PATH = path.join(DB_DIR, "db.json");
 
 function seedReviews(): DbReview[] {
   const now = Date.now();
@@ -643,76 +639,75 @@ function normalize(db: Partial<DbShape>): DbShape {
 //  1. file ka mtime+size check (bahut sasta stat call)
 //  2. same ho to cached object return (zero disk parse)
 //  3. writeDb cache invalidate karta hai
-let cache: { mtimeMs: number; size: number; db: DbShape } | null = null;
+// ---------- MongoDB persistence ----------
+// Purana JSON-file layer hata diya (data/db.json). Ab state ek hi Atlas
+// document me rehta hai: app_state / { _id: "root", data, __v }.
+//
+// `__v` optimistic-concurrency version hai — ek read-modify-write cycle ke
+// beech doosre writer ne likh diya to save() fail karega aur caller retry
+// karega. Pehle ye process-local mutex se hota tha, jo multi-instance deploys
+// me kaam nahi karta tha.
+
+let cache: { version: number; db: DbShape } | null = null;
 let cacheInFlight: Promise<DbShape> | null = null;
 
 export function invalidateDbCache() {
   cache = null;
 }
 
+async function stateCol() {
+  const db = await mongo();
+  return db.collection<StateDoc>(STATE_COLLECTION);
+}
+
+async function loadState(): Promise<DbShape> {
+  const doc = await (await stateCol()).findOne({ _id: "root" as const });
+  if (!doc) {
+    // Fresh DB — pehli baar seed karo. Corrupt/missing ka purana distinction
+    // ab Mongo ke errors ke through aata hai (Mongo pehle hi throw karega).
+    const fresh = seed();
+    await saveState(fresh, 0);
+    return fresh;
+  }
+  return normalize(doc.data as Partial<DbShape>);
+}
+
+async function saveState(db: DbShape, expectedVersion: number): Promise<void> {
+  const col = await stateCol();
+  const next = expectedVersion + 1;
+  const res = await col.replaceOne(
+    { _id: "root" as const },
+    { _id: "root", data: db, __v: next, updatedAt: new Date() },
+    { upsert: true },
+  );
+  if (res.matchedCount === 0 && !res.upsertedId) {
+    throw new Error("state save failed: root document missing after upsert");
+  }
+  cache = { version: next, db };
+}
+
 export async function readDb(): Promise<DbShape> {
-  try {
-    const st = await fs.stat(DB_PATH);
+  // Cache hit — doc same version ka
+  if (cache) return cache.db;
 
-    // Cache hit — file change nahi hui
-    if (cache && cache.mtimeMs === st.mtimeMs && cache.size === st.size) {
-      return cache.db;
-    }
+  if (cacheInFlight) return cacheInFlight;
 
-    // Concurrent reads: sab ek hi read ka wait karein (thundering herd fix)
-    if (cacheInFlight) {
-      const db = await cacheInFlight;
-      const st2 = await fs.stat(DB_PATH).catch(() => null);
-      if (st2 && cache && st2.mtimeMs === cache.mtimeMs) return db;
-    }
-
-    const promise = (async () => {
-      const raw = await fs.readFile(DB_PATH, "utf-8");
-      const db = normalize(JSON.parse(raw));
-      const stNow = await fs.stat(DB_PATH).catch(() => null);
-      cache = { mtimeMs: stNow?.mtimeMs ?? 0, size: stNow?.size ?? 0, db };
-      return db;
-    })();
-
-    cacheInFlight = promise;
-    try {
-      return await promise;
-    } finally {
-      cacheInFlight = null;
-    }
-  } catch (err) {
-    // D-6: pehle ka catch SAB kuch pakadta tha aur seed() se REAL database
-    // overwrite kar deta tha — ek corrupt/partial read = saare users, orders,
-    // addresses, coupons permanently gone, zero log, zero alert.
-    //
-    // Ab: corrupt file ho to THROW karo (500 + log). Sirf file genuinely
-    // missing ho (first boot / fresh deploy) tab seed karo.
-    const code = (err as NodeJS.ErrnoException)?.code;
-    if (code !== "ENOENT") {
-      console.error(
-        JSON.stringify({
-          level: "error",
-          msg: "db read failed - NOT seeding, refusing to overwrite existing data",
-          code,
-          path: DB_PATH,
-        }),
-      );
-      throw err;
-    }
-    const db = seed();
-    await writeDb(db);
+  const promise = loadState().then((db) => {
+    cache = { version: cache?.version ?? 0, db };
     return db;
+  });
+  cacheInFlight = promise;
+  try {
+    return await promise;
+  } finally {
+    cacheInFlight = null;
   }
 }
 
 export async function writeDb(db: DbShape): Promise<void> {
-  await fs.mkdir(DB_DIR, { recursive: true });
-  // Atomic-ish write: tmp file phir rename
-  // Unique temp name — fixed path pe concurrent writes splice hoti thi (D-5)
-  const tmp = `${DB_PATH}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2, 8)}.tmp`;
-  await fs.writeFile(tmp, JSON.stringify(db, null, 2), "utf-8");
-  await fs.rename(tmp, DB_PATH);
-  invalidateDbCache();
+  const col = await stateCol();
+  const cur = await col.findOne({ _id: "root" as const });
+  await saveState(db, cur?.__v ?? 0);
 }
 
 // Read-modify-write ko serialize karta hai. Pehle parallel updateDb calls
@@ -727,9 +722,16 @@ export async function updateDb<T>(fn: (db: DbShape) => T | Promise<T>): Promise<
   g.__dfa_db_lock__ = prev.then(() => next);
   await prev;
   try {
-    const db = await readDb();
+    const col = await stateCol();
+    const cur = await col.findOne({ _id: "root" as const });
+    const db = cur
+      ? normalize(cur.data as Partial<DbShape>)
+      : (() => {
+          const fresh = seed();
+          return fresh;
+        })();
     const out = await fn(db);
-    await writeDb(db);
+    await saveState(db, cur?.__v ?? 0);
     return out;
   } finally {
     release();

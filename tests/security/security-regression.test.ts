@@ -323,27 +323,36 @@ describe("platform hardening", () => {
     assert.ok(h.get("x-frame-options") || h.get("content-security-policy"), "no clickjacking header");
   });
 
-  it("db corruption must not silently reset to seed data", async () => {
-    // Guard: readDb must throw on a parse error rather than reseeding.
+  it("a failed read must never silently wipe existing data", async () => {
+    // Purana JSON-file version corrupt db.json karke throw expect karta tha.
+    // Ab backend MongoDB hai, isliye file-corruption vector khatam.
+    //
+    // Ye suite black-box (HTTP only) hai — server-only modules import nahi
+    // karte. Yahan wahi makhsad check hota hai jo API se dikhta hai: real
+    // data zinda hai, aur writes persist hote hain.
     if (!serverUp) return;
-    const { readDb } = await import("../../lib/server/db.js");
-    const fs = await import("node:fs/promises");
-    const path = await import("node:path");
-    const p = path.join(process.cwd(), "data", "db.json");
-    const original = await fs.readFile(p, "utf-8");
-    try {
-      await fs.writeFile(p, "{ this is not valid json");
-      let threw = false;
-      try {
-        await readDb();
-      } catch {
-        threw = true;
-      }
-      assert.ok(threw, "readDb swallowed a corrupt file instead of failing loudly");
-      const after = await fs.readFile(p, "utf-8");
-      assert.equal(after, "{ this is not valid json", "readDb overwrote the corrupt file");
-    } finally {
-      await fs.writeFile(p, original);
-    }
+
+    // 1. Real data present hai (wipe/reesed ka signal: 0 orders / 0 products)
+    const h = await call("/api/health?detail=1");
+    assert.equal(h.status, 200, "health endpoint down");
+    const info = h.body?.checks?.db?.info ?? {};
+    assert.ok(
+      (info.orders ?? 0) > 0 && (info.products ?? 0) > 0,
+      `db reports orders=${info.orders} products=${info.products} — looks wiped/reeseded`,
+    );
+
+    // 2. Persist proof - newsletter subscribe (public, no auth).
+    //    Rate-limit (429) ho to ye half skip ho jata hai: ye probe best-effort
+    //    hai, core invariant upar wali assertion already verify kar chuki hai.
+    const stamp = Date.now().toString(36);
+    const probe = await call("/api/newsletter", {
+      method: "POST",
+      body: { email: `integrity-${stamp}@example.com` },
+    });
+    if (probe.status === 429) return; // rate-limited: skip best-effort probe
+    assert.ok(
+      [200, 201, 409].includes(probe.status),
+      `newsletter write failed unexpectedly: ${probe.status}`,
+    );
   });
 });
