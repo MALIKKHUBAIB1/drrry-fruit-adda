@@ -3,6 +3,7 @@ import { readDb, updateDb } from "@/lib/server/db";
 import type { Product as ProductType } from "@/lib/products";
 import { ADMIN_DENIED, requireAdmin } from "@/lib/server/admin";
 import { cleanText, readJsonSafe, sameOrigin, toFloat, toInt } from "@/lib/server/security";
+import { announceNewProduct } from "@/lib/server/notify";
 
 const VALID_GROUPS = ["dry-fruits", "nuts-seeds", "dates-figs", "gift-hampers"];
 
@@ -134,7 +135,24 @@ export async function POST(req: NextRequest) {
     return p;
   }).catch((e: Error) => ({ __error: e.message }) as unknown as null);
   if (product && "__error" in product) return NextResponse.json({ error: product.__error }, { status: 409 });
-  return NextResponse.json({ product }, { status: 201 });
+  if (!product) return NextResponse.json({ error: "Failed to save product." }, { status: 500 });
+
+  // Newsletter alert — best effort. Email fail ho toh PRODUCT FAIL NAHI
+  // hota; alert ka result response me chala jata hai (admin UI/test ke liye).
+  let announce: Awaited<ReturnType<typeof announceNewProduct>> = {};
+  try {
+    announce = await announceNewProduct(product);
+  } catch (e) {
+    console.error(
+      JSON.stringify({
+        level: "error",
+        msg: "new-product announce failed",
+        slug: product.slug,
+        error: e instanceof Error ? e.message : String(e),
+      }),
+    );
+  }
+  return NextResponse.json({ product, announce }, { status: 201 });
 }
 
 // PUT /api/admin/products { slug, ...fields }

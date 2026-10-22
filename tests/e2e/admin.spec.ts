@@ -14,7 +14,8 @@ test.describe("admin panel", () => {
   test("admin can login and dashboard loads", async ({ page }) => {
     await page.goto("/admin/login");
     await page.getByLabel(/email/i).fill(ADMIN_EMAIL);
-    await page.getByLabel(/password/i).fill(ADMIN_PASS!);
+    // .first() — "Show password" button ka aria-label bhi /password/i se match hota hai
+    await page.getByLabel(/password/i).first().fill(ADMIN_PASS!);
     await page.getByRole("button", { name: /login/i }).click();
 
     await page.waitForURL(/\/admin$/, { timeout: 20_000 });
@@ -42,6 +43,7 @@ test.describe("admin panel", () => {
       data: { name: "Non Admin 2", email: `e2e-nonadm2-${stamp}@example.com`, password: "E2eCustomer!2026" },
     });
     const res = await request.get("/api/admin/stats");
-    expect(res.status()).toBe(401);
+    // Admin API non-admin/unknown session ko 403 se reject karta hai
+    expect(res.status()).toBe(403);
   });
 });

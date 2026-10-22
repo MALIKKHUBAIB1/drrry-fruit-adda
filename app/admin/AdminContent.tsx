@@ -10,6 +10,7 @@ import { categories, inr, DEFAULT_DELIVERY_OPTIONS, etaLabel } from "@/lib/produ
 import { cn } from "@/lib/utils";
 import ImageUploadButton from "@/components/admin/ImageUploadButton";
 import HeroBannerEditor from "@/components/admin/HeroBannerEditor";
+import BroadcastsTab from "@/components/admin/BroadcastsTab";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, PieChart, Pie, Cell, Legend, LineChart, Line } from "recharts";
 
 async function j(path: string, init?: RequestInit) {
@@ -19,7 +20,7 @@ async function j(path: string, init?: RequestInit) {
   return data;
 }
 
-const TABS = ["Overview", "Orders", "Products", "Categories", "Gift Hampers", "Promo Banner", "Pincodes", "Coupons", "Users", "Messages", "Reviews"] as const;
+const TABS = ["Overview", "Orders", "Products", "Categories", "Gift Hampers", "Promo Banner", "Broadcasts", "Pincodes", "Coupons", "Users", "Messages", "Reviews"] as const;
 type Tab = (typeof TABS)[number];
 
 export default function AdminContent() {
@@ -114,6 +115,7 @@ export default function AdminContent() {
           {tab === "Categories" && "Shop-by-category tiles on the home page."}
           {tab === "Gift Hampers" && "Curated gift hampers with multiple items."}
           {tab === "Promo Banner" && "Hero banner + offer banner with live countdown, both on the home page."}
+        {tab === "Broadcasts" && "Email offers and announcements to users and newsletter subscribers (Resend)."}
           {tab === "Pincodes" && "Pincode-wise delivery charges across India."}
           {tab === "Coupons" && "Create and manage discount codes."}
           {tab === "Users" && "Customers and admin access."}
@@ -142,6 +144,7 @@ export default function AdminContent() {
             <PromoTab promo={promo} announcements={announcements} reload={load} />
           </div>
         )}
+        {tab === "Broadcasts" && <BroadcastsTab />}
         {tab === "Pincodes" && <PincodesTab reload={load} />}
         {tab === "Coupons" && <CouponsTab coupons={coupons} reload={load} />}
         {tab === "Users" && <UsersTab users={users} reload={load} />}

@@ -49,6 +49,12 @@ export async function PUT(req: NextRequest) {
   const updated = await updateDb((db) => {
     if (announcements?.length) db.settings.announcements = announcements;
     const p = db.settings.promo;
+    if (typeof body.newProductAlerts === "boolean") {
+      db.settings.newProductAlerts = body.newProductAlerts;
+    }
+    if (typeof body.orderStatusEmails === "boolean") {
+      db.settings.orderStatusEmails = body.orderStatusEmails;
+    }
     if (typeof promo.enabled === "boolean") p.enabled = promo.enabled;
     if (typeof promo.title === "string") p.title = cleanText(promo.title, 120);
     if (typeof promo.subtitle === "string") p.subtitle = cleanText(promo.subtitle, 160);

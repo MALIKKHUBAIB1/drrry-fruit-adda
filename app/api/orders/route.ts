@@ -4,6 +4,7 @@ import { getSessionUser, newId } from "@/lib/server/auth";
 import { couponStatus } from "@/lib/server/db";
 import { optionsOf } from "@/lib/products";
 import { shippingForPin } from "@/lib/server/pincode";
+import { sendOrderStatusEmail } from "@/lib/server/ordermail";
 import {
   cleanText,
   isValidEmail,
@@ -189,6 +190,22 @@ export async function POST(req: NextRequest) {
       { error: (order as unknown as { __error: string }).__error },
       { status: 400 },
     );
+  }
+  // Confirmation email — COD yahin; online orders payment verify hone par
+  // (paid tabhi "confirmed" hota hai). Best effort — fail par order theek.
+  if (payment === "cod") {
+    try {
+      await sendOrderStatusEmail(order, "placed");
+    } catch (e) {
+      console.error(
+        JSON.stringify({
+          level: "error",
+          msg: "order placed email crashed",
+          orderId: order.id,
+          error: e instanceof Error ? e.message : String(e),
+        }),
+      );
+    }
   }
   return NextResponse.json({ order }, { status: 201 });
 }

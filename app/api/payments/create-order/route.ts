@@ -8,6 +8,7 @@ import {
 } from "@/lib/server/admin";
 import { cleanText, rateLimit, readJsonSafe, sameOrigin } from "@/lib/server/security";
 import { publish } from "@/lib/server/events";
+import { issueOrderRefund } from "@/lib/server/refunds";
 
 const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID?.trim() || "";
 const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET?.trim() || "";
@@ -183,31 +184,24 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: "Already refunded." }, { status: 409 });
   }
 
-  try {
-    const rzp = new Razorpay({ key_id: RAZORPAY_KEY_ID, key_secret: RAZORPAY_KEY_SECRET });
-    const refund = await rzp.payments.refund(paymentId, {});
-
+  const refund = await issueOrderRefund(order);
+  if (refund.status === "failed") {
+    return NextResponse.json({ error: refund.error ?? "Refund failed." }, { status: 502 });
+  }
+  if (refund.status === "refunded") {
+    // order ko cancelled bhi kar do (refund ke saath cancel ka standard flow)
     await updateDb((d) => {
       const o = d.orders.find((x) => x.id === orderId);
-      if (o) {
-        o.paymentStatus = "refunded";
-        o.refundId = refund.id;
-        o.refundedAt = new Date().toISOString();
+      if (o && o.status !== "delivered") {
         o.status = "cancelled";
         o.statusHistory = [
           ...(o.statusHistory ?? []),
-          { status: "cancelled" as const, at: new Date().toISOString(), note: "Refunded" },
+          { status: "cancelled" as const, at: new Date().toISOString(), note: "Refunded by admin" },
         ];
       }
       return d;
     });
     publish({ orderId, status: "cancelled" });
-
-    return NextResponse.json({ ok: true, refundId: refund.id });
-  } catch (e) {
-    return NextResponse.json(
-      { error: e instanceof Error ? e.message : "Refund failed." },
-      { status: 502 },
-    );
   }
+  return NextResponse.json({ ok: true, refundId: refund.refundId ?? null, refund });
 }

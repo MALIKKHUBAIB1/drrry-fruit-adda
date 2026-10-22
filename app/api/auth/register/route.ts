@@ -48,7 +48,7 @@ export async function POST(req: Request) {
   }
 
   const { salt, hash } = hashPassword(password);
-  const user = { id: newId("U-"), name, email, passHash: hash, salt, isAdmin: false, createdAt: new Date().toISOString() };
+  const user = { id: newId("U-"), name, email, mobile: "", passHash: hash, salt, isAdmin: false, createdAt: new Date().toISOString() };
   const token = newToken();
   const expiresAt = sessionExpiry();
 

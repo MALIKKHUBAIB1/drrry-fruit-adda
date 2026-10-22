@@ -2,61 +2,94 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
-import { ArrowRight, Eye, EyeOff, Lock, Mail } from "lucide-react";
+import { ArrowRight, Mail } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { AuthLayout, authInput } from "@/components/site/AuthLayout";
-
-const DEV = process.env.NODE_ENV !== "production";
-
-// Seeded dummy logins (lib/server/db.ts se match karta hai) — sirf local dev me dikhta hai
-const DEV_ACCOUNTS = [
-  { name: "Priya Sharma (2 orders)", email: "priya@example.com", pass: "Demo@123" },
-  { name: "Sneha Patel (1 shipped, 1 cancelled)", email: "sneha@example.com", pass: "Demo@123" },
-  { name: "Rahul Verma (1 delivered)", email: "rahul@example.com", pass: "Demo@123" },
-  { name: "Fatima Khan (1 delivered)", email: "fatima@example.com", pass: "Demo@123" },
-];
+import { OtpEntry } from "@/components/site/OtpEntry";
 
 export default function LoginForm() {
-  const { user, login } = useAuth();
+  const { user, sendOtp, verifyOtp } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirect = searchParams.get("redirect") ?? undefined;
   const [email, setEmail] = useState("");
-  const [pass, setPass] = useState("");
-  const [show, setShow] = useState(false);
+  const [otp, setOtp] = useState("");
+  const [stage, setStage] = useState<"email" | "otp">("email");
+  const [devCode, setDevCode] = useState<string | undefined>(undefined);
+  const [resendIn, setResendIn] = useState(0);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const submit = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (isAdminEmail) {
-      setErr("Admin account — please use the Admin Login page.");
-      return;
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-      setErr("Enter a valid email address.");
-      return;
-    }
-    if (!pass) {
-      setErr("Enter your password.");
-      return;
-    }
-    setBusy(true);
-    setErr(null);
-    const msg = await login(email, pass);
-    setBusy(false);
-    if (msg) setErr(msg);
-    else router.push(redirect ?? "/account");
-  };
-
-  // Admin email se user login nahi hoga
+  // Admin email se user login nahi hoga — alag Admin Login page hai.
   const isAdminEmail = email.trim().toLowerCase() === "admin@dryfruitadda.in";
 
   useEffect(() => {
     if (user) router.replace(redirect ?? "/account");
   }, [user, redirect, router]);
 
+  useEffect(() => {
+    if (resendIn <= 0) return;
+    const t = setTimeout(() => setResendIn((s) => s - 1), 1000);
+    return () => clearTimeout(t);
+  }, [resendIn]);
+
   if (user) return null;
+
+  const requestOtp = async (e?: FormEvent<HTMLFormElement>) => {
+    e?.preventDefault();
+    if (isAdminEmail) {
+      setErr("Admin account — please use the Admin Login page.");
+      return;
+    }
+    const mail = email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail)) {
+      setErr("Enter a valid email address.");
+      return;
+    }
+    setBusy(true);
+    setErr(null);
+    const r = await sendOtp(mail, "login");
+    setBusy(false);
+    if (!r.ok) {
+      setErr(r.error);
+      return;
+    }
+    setOtp("");
+    setDevCode(r.devCode);
+    setStage("otp");
+    setResendIn(45);
+  };
+
+  const resend = async () => {
+    if (resendIn > 0 || busy) return;
+    setBusy(true);
+    setErr(null);
+    const r = await sendOtp(email.trim().toLowerCase(), "login");
+    setBusy(false);
+    if (!r.ok) {
+      setErr(r.error);
+      return;
+    }
+    setOtp("");
+    setDevCode(r.devCode);
+    setResendIn(45);
+  };
+
+  const verify = async () => {
+    if (otp.length !== 6) {
+      setErr("Enter the 6-digit code.");
+      return;
+    }
+    setBusy(true);
+    setErr(null);
+    const msg = await verifyOtp({ email: email.trim().toLowerCase(), code: otp });
+    setBusy(false);
+    if (msg) {
+      setErr(msg);
+      return;
+    }
+    router.push(redirect ?? "/account");
+  };
 
   return (
     <AuthLayout
@@ -68,103 +101,64 @@ export default function LoginForm() {
       switchLabel="Create an account"
       switchSearch={redirect ? { redirect } : undefined}
     >
-      <form
-        noValidate
-        onSubmit={submit}
-        className="space-y-4"
-      >
-        <label className="block text-sm font-medium">
-          Email
-          <span className="relative mt-1.5 block">
-            <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-foreground/35" />
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
-              autoComplete="email"
-              required
-              minLength={5}
-              maxLength={254}
-              className={authInput}
-            />
-          </span>
-        </label>
-        <label className="block text-sm font-medium">
-          <span className="flex items-center justify-between">
-            Password
-            <span className="text-xs font-normal text-muted-foreground">Min 6 characters</span>
-          </span>
-          <span className="relative mt-1.5 block">
-            <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-foreground/35" />
-            <input
-              type={show ? "text" : "password"}
-              value={pass}
-              onChange={(e) => setPass(e.target.value)}
-              placeholder="••••••••"
-              autoComplete="current-password"
-              required
-              minLength={6}
-              maxLength={128}
-              className={authInput}
-            />
-            <button
-              type="button"
-              aria-label={show ? "Hide password" : "Show password"}
-              onClick={() => setShow((s) => !s)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-foreground/40 hover:text-primary"
-            >
-              {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-            </button>
-          </span>
-        </label>
-        {err && (
-          <p
-            role="alert"
-            className="rounded-xl border border-destructive/25 bg-destructive/[0.06] px-4 py-2.5 text-sm text-destructive"
+      {stage === "email" ? (
+        <form noValidate onSubmit={requestOtp} className="space-y-4">
+          <label className="block text-sm font-medium">
+            Email
+            <span className="relative mt-1.5 block">
+              <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-foreground/35" />
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                autoComplete="email"
+                required
+                minLength={5}
+                maxLength={254}
+                className={authInput}
+              />
+            </span>
+          </label>
+          <button
+            disabled={busy}
+            className="group flex w-full items-center justify-center gap-2 rounded-full bg-primary py-3.5 font-medium text-primary-foreground transition hover:bg-primary-hover active:scale-[0.99] disabled:opacity-60"
           >
-            {err}
+            {busy ? "Sending code…" : "Send OTP"}
+            <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+          </button>
+          <p className="text-center text-xs text-muted-foreground">
+            We&apos;ll email you a 6-digit code — no password needed.
           </p>
-        )}
-        {DEV && (
-          <div className="rounded-xl border border-gold/30 bg-gold/10 p-3">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-gold">
-              Test accounts (dev only)
-            </p>
-            <div className="mt-2 grid gap-1.5">
-              {DEV_ACCOUNTS.map((a) => (
-                <button
-                  key={a.email}
-                  type="button"
-                  onClick={() => {
-                    setEmail(a.email);
-                    setPass(a.pass);
-                    setErr(null);
-                  }}
-                  className="flex items-center justify-between gap-2 rounded-lg bg-card/70 px-2.5 py-1.5 text-left text-xs transition hover:bg-card"
-                >
-                  <span className="min-w-0">
-                    <b className="block truncate font-medium">{a.name}</b>
-                    <span className="block truncate text-[10px] text-muted-foreground">
-                      {a.email}
-                    </span>
-                  </span>
-                  <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
-                    {a.pass}
-                  </span>
-                </button>
-              ))}
-            </div>
-            <p className="mt-2 text-[10px] text-muted-foreground">
-              Click to fill. Admin login → /admin
-            </p>
-          </div>
-        )}
-        <button disabled={busy} className="group flex w-full items-center justify-center gap-2 rounded-full bg-primary py-3.5 font-medium text-primary-foreground transition hover:bg-primary-hover active:scale-[0.99] disabled:opacity-60">
-          {busy ? "Logging in…" : "Login"}
-          <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-        </button>
-      </form>
+        </form>
+      ) : (
+        <OtpEntry
+          email={email}
+          value={otp}
+          onChange={(v) => {
+            setOtp(v);
+            if (err) setErr(null);
+          }}
+          onSubmit={verify}
+          onBack={() => {
+            setStage("email");
+            setOtp("");
+            setErr(null);
+          }}
+          onResend={resend}
+          resendIn={resendIn}
+          busy={busy}
+          devCode={devCode}
+        />
+      )}
+      {err && (
+        <p
+          role="alert"
+          className="mt-4 rounded-xl border border-destructive/25 bg-destructive/[0.06] px-4 py-2.5 text-sm text-destructive"
+        >
+          {err}
+        </p>
+      )}
     </AuthLayout>
   );
 }

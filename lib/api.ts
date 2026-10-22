@@ -14,7 +14,14 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   return data as T;
 }
 
-export type ApiUser = { id: string; name: string; email: string; isAdmin: boolean; createdAt: string };
+export type ApiUser = {
+  id: string;
+  name: string;
+  email: string;
+  mobile?: string;
+  isAdmin: boolean;
+  createdAt: string;
+};
 export type ApiOrderItem = {
   slug: string;
   name: string;
@@ -37,6 +44,8 @@ export type ApiOrder = {
   pin: string;
   payment: "cod" | "online";
   status: string;
+  /** Server-set: pending | paid | failed | refunded */
+  paymentStatus?: string;
   createdAt: string;
 };
 export type ApiReview = {

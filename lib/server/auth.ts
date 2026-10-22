@@ -40,5 +40,12 @@ export async function getSessionUser(req: NextRequest): Promise<DbUser | null> {
 }
 
 export function publicUser(u: DbUser) {
-  return { id: u.id, name: u.name, email: u.email, isAdmin: !!u.isAdmin, createdAt: u.createdAt };
+  return {
+    id: u.id,
+    name: u.name,
+    email: u.email,
+    mobile: u.mobile ?? "",
+    isAdmin: !!u.isAdmin,
+    createdAt: u.createdAt,
+  };
 }

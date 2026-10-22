@@ -111,9 +111,6 @@ export function AuthLayout({
             </p>
           </div>
         </div>
-        <p className="mt-4 text-center text-xs text-muted-foreground">
-          Demo login — accounts are saved only in this browser.
-        </p>
       </div>
     </div>
   );

@@ -33,6 +33,8 @@ export type DbUser = {
   id: string;
   name: string;
   email: string;
+  /** 10-digit Indian mobile — naye accounts par compulsory, purane users par "" */
+  mobile: string;
   passHash: string;
   salt: string;
   isAdmin: boolean;
@@ -42,6 +44,15 @@ export type DbUser = {
 export type DbSession = {
   token: string;
   userId: string;
+  createdAt: string;
+  expiresAt: string;
+};
+
+export type DbOtp = {
+  id: string; // lowercase email — ek email pe ek hi active OTP
+  codeHash: string; // sha256(OTP_PEPPER + code)
+  purpose: "login" | "register";
+  attempts: number;
   createdAt: string;
   expiresAt: string;
 };
@@ -101,7 +112,7 @@ export type DbOrder = {
   refundedAt?: string;
   /** Payment attempts — replay detection */
   paymentAttempts?: number;
-  status: "placed" | "shipped" | "delivered" | "cancelled";
+  status: DbOrderStatus;
   statusHistory?: { status: DbOrderStatus; at: string; note?: string }[];
   trackingNumber?: string;
   trackingUrl?: string;
@@ -130,6 +141,22 @@ export type DbReview = {
 };
 
 export type CartItem = { slug: string; variant: string; qty: number };
+
+export type DbBroadcast = {
+  id: string;
+  subject: string;
+  bodyHtml: string;
+  audience: "users" | "subscribers" | "both" | "test";
+  status: "draft" | "scheduled" | "sending" | "sent" | "failed";
+  scheduledAt: string | null; // ISO — scheduled ho to
+  sentAt: string | null;
+  recipientCount: number;
+  sentCount: number;
+  failedCount: number;
+  lastError: string | null;
+  createdBy: string; // admin email
+  createdAt: string;
+};
 
 export type DbAddress = {
   id: string;
@@ -161,6 +188,10 @@ export type DbPincode = {
 export type DbSettings = {
   // Top ticker bar ke messages — admin se editable
   announcements: string[];
+  // Naya product add hone par newsletter subscribers ko email alert
+  newProductAlerts: boolean;
+  // Order status emails (placed / out-for-delivery / delivered) customer ko
+  orderStatusEmails: boolean;
   // Home page hero banner — admin se editable
   hero: {
     enabled: boolean;
@@ -229,6 +260,8 @@ export type DbShape = {
   reviews: DbReview[];
   addresses: DbAddress[];
   newsletter: DbSubscriber[];
+  broadcasts: DbBroadcast[];
+  otps: DbOtp[];
   carts: Record<string, CartItem[]>;
   wishlists: Record<string, string[]>;
 };
@@ -301,6 +334,8 @@ function seedHampers(): DbHamper[] {
 function seedSettings(): DbSettings {
   const now = Date.now();
   return {
+    newProductAlerts: true,
+    orderStatusEmails: true,
     announcements: [
       "Premium Dry Fruits, Delivered to Your Doorstep",
       "Special Offers on Premium Gift Boxes",
@@ -353,6 +388,7 @@ function seedUsers(): DbUser[] {
     id,
     name,
     email,
+    mobile: "",
     passHash: hash,
     salt,
     isAdmin: false,
@@ -424,6 +460,7 @@ function seed(): DbShape {
         id: "U-ADMIN",
         name: "Store Admin",
         email: ADMIN_EMAIL,
+        mobile: "",
         passHash: hash,
         salt,
         isAdmin: true,
@@ -435,6 +472,8 @@ function seed(): DbShape {
     categories: categories.map((c) => ({ ...c })),
     hampers: seedHampers(),
     settings: seedSettings(),
+    broadcasts: [],
+    otps: [],
     pincodes: seedPincodes(),
     hiddenPincodes: [],
     coupons: [
@@ -594,6 +633,7 @@ function normalize(db: Partial<DbShape>): DbShape {
   // Users: purane records me isAdmin flag ensure karo.
   const users = (db.users ?? s.users).map((u) => ({
     ...u,
+    mobile: u.mobile ?? "",
     isAdmin: !!u.isAdmin || u.email.toLowerCase() === ADMIN_EMAIL,
   }));
   // Admin user hamesha exist kare (purane DB me bhi).
@@ -625,6 +665,7 @@ function normalize(db: Partial<DbShape>): DbShape {
   return {
     users,
     sessions: db.sessions ?? s.sessions,
+    otps: db.otps ?? s.otps,
     products,
     // Categories: admin edits persist rahen, naye seed merge hote rahen.
     categories: (() => {
@@ -654,6 +695,7 @@ function normalize(db: Partial<DbShape>): DbShape {
     newsletter: db.newsletter ?? [],
     carts: db.carts ?? {},
     wishlists: db.wishlists ?? {},
+    broadcasts: db.broadcasts ?? [],
   };
 }
 

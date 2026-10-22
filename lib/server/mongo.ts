@@ -50,6 +50,8 @@ export const ARRAY_COLLECTIONS = [
   "reviews",
   "addresses",
   "newsletter",
+  "broadcasts",
+  "otps",
 ] as const;
 
 export type ArrayCollectionName = (typeof ARRAY_COLLECTIONS)[number];

@@ -5,6 +5,7 @@ import { readDb, updateDb } from "@/lib/server/db";
 import { getSessionUser } from "@/lib/server/auth";
 import { cleanText, rateLimit, readJsonSafe, sameOrigin } from "@/lib/server/security";
 import { publish } from "@/lib/server/events";
+import { sendOrderStatusEmail } from "@/lib/server/ordermail";
 
 const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID?.trim() || "";
 const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET?.trim() || "";
@@ -197,6 +198,21 @@ export async function POST(req: NextRequest) {
   if (!updated) return NextResponse.json({ error: "Order not found." }, { status: 404 });
 
   publish({ orderId, status: "placed" });
+
+  // Payment success = confirmed order — yahan confirmation email (COD wale
+  // order create hi pe chuki hoti hain). Best effort.
+  try {
+    await sendOrderStatusEmail(updated, "placed");
+  } catch (e) {
+    console.error(
+      JSON.stringify({
+        level: "error",
+        msg: "order paid email crashed",
+        orderId,
+        error: e instanceof Error ? e.message : String(e),
+      }),
+    );
+  }
 
   // Poora order object mat bhejo — sirf confirmation
   return NextResponse.json({

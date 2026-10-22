@@ -10,8 +10,8 @@ export function Footer() {
           <img src="https://ik.imagekit.io/kjm6lzdqi/dryfruitadda/products/logo-sm_8aov28_Ti.jpg" alt="Dryfruit Adda" width={72} height={72} className="h-18 w-18 rounded-full ring-1 ring-gold" loading="lazy" />
           <p className="mt-4 text-sm leading-relaxed text-cocoa-foreground/75">Handpicked premium dry fruits, nuts and gift hampers — luxury in every bite, delivered across India.</p>
           <div className="mt-4 flex gap-3 text-gold">
-            <a href="#" aria-label="Instagram"><Instagram className="h-5 w-5" /></a>
-            <a href="#" aria-label="Facebook"><Facebook className="h-5 w-5" /></a>
+            <a href="https://www.instagram.com/dryfruitadda_1" target="_blank" rel="noopener noreferrer" aria-label="Instagram"><Instagram className="h-5 w-5" /></a>
+            <a href="https://www.facebook.com/share/1ePTjcvYds/" target="_blank" rel="noopener noreferrer" aria-label="Facebook"><Facebook className="h-5 w-5" /></a>
             <a href="#" aria-label="YouTube"><Youtube className="h-5 w-5" /></a>
           </div>
         </div>

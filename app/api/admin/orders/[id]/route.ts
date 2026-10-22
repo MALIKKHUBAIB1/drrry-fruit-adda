@@ -3,6 +3,7 @@ import { updateDb, type DbOrder } from "@/lib/server/db";
 import { ADMIN_DENIED, requireAdmin } from "@/lib/server/admin";
 import { cleanText, readJsonSafe, safeUrl, sameOrigin } from "@/lib/server/security";
 import { ORDER_STATUSES, isOrderStatus, publish } from "@/lib/server/events";
+import { sendOrderStatusEmail } from "@/lib/server/ordermail";
 
 // PATCH /api/admin/orders/:id — status / tracking number / note update
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -71,6 +72,21 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   // Live update — customers tracking the order see this instantly
   if (result.changed) {
     publish({ orderId: result.order.id, status: result.order.status });
+    // placed / out-for-delivery / delivered par customer email (function
+    // khud gate karta hai — packed/shipped par kuch nahi).
+    try {
+      await sendOrderStatusEmail(result.order, result.order.status);
+    } catch (e) {
+      console.error(
+        JSON.stringify({
+          level: "error",
+          msg: "order status email crashed",
+          orderId: result.order.id,
+          status: result.order.status,
+          error: e instanceof Error ? e.message : String(e),
+        }),
+      );
+    }
   }
 
   return NextResponse.json({ order: result.order });

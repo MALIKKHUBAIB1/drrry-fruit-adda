@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Heart, Menu, Search, ShoppingBag, User, X } from "lucide-react";
 import { useState } from "react";
 import { products } from "@/lib/products";
@@ -73,6 +73,11 @@ export function Header({ announcements }: { announcements?: string[] }) {
   const { user } = useAuth();
   const { settings } = useCatalog();
   const [open, setOpen] = useState(false);
+  const pathname = usePathname();
+  // Amazon-style: signed-out ho toh login ke baad wahin wapas aao (checkout
+  // par login karne par form bharha hua milega). Sirf pathname — window.search
+  // SSR/client mismatch laata.
+  const signInHref = `/login?redirect=${encodeURIComponent(pathname)}`;
   // Messages shared context se — Header khud fetch nahi karta (duplicate hata diya)
   const messages = announcements?.length ? announcements : settings.announcements;
 
@@ -109,18 +114,24 @@ export function Header({ announcements }: { announcements?: string[] }) {
           </div>
           <div className="ml-auto flex items-center gap-1 text-primary md:ml-0">
             <Link
-              href="/account"
-              aria-label="Account"
-              title={user ? user.name : "Login / Register"}
-              className="hidden rounded-full p-2 hover:bg-muted sm:block"
+              href={user ? "/account" : signInHref}
+              aria-label={user ? "My account" : "Sign in"}
+              title={user ? user.name : "Sign in / Register"}
+              className="hidden items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-muted sm:flex"
             >
               {user ? (
-                <span className="grid h-5 w-5 place-items-center rounded-full bg-primary text-[11px] font-bold text-primary-foreground">
+                <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-primary text-[11px] font-bold text-primary-foreground">
                   {user.name.trim().charAt(0).toUpperCase()}
                 </span>
               ) : (
-                <User className="h-5 w-5" />
+                <User className="h-5 w-5 shrink-0" />
               )}
+              <span className="hidden text-left leading-tight lg:block">
+                <span className="block text-[11px] text-muted-foreground">
+                  {user ? `Hello, ${user.name.trim().split(" ")[0]}` : "Hello, Sign in"}
+                </span>
+                <span className="block text-[12px] font-semibold text-foreground">Account &amp; Orders</span>
+              </span>
             </Link>
             <Link
               href="/wishlist"
@@ -181,6 +192,16 @@ export function Header({ announcements }: { announcements?: string[] }) {
               <X className="h-6 w-6 text-primary" />
             </button>
             <ul className="space-y-4">
+              <li className="border-b border-border pb-4">
+                <Link
+                  href={user ? "/account" : signInHref}
+                  onClick={() => setOpen(false)}
+                  className="flex items-center gap-2.5 font-display text-xl text-primary hover:underline"
+                >
+                  <User className="h-5 w-5" />
+                  {user ? `Hi, ${user.name.trim().split(" ")[0]}` : "Sign in / Register"}
+                </Link>
+              </li>
               {nav.map((n) => (
                 <li key={n.label}>
                   <Link

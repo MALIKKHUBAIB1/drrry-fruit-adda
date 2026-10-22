@@ -6,11 +6,22 @@ import { api, type ApiUser } from "./api";
 
 export type User = ApiUser;
 
+export type SendOtpResult =
+  | { ok: true; devCode?: string | undefined }
+  | { ok: false; error: string };
+
 type Auth = {
   user: User | null;
   loading: boolean;
+  /** Password login — sirf Admin Login page ke liye (site par OTP-only). */
   login: (email: string, password: string) => Promise<string | null>;
-  register: (name: string, email: string, password: string) => Promise<string | null>;
+  sendOtp: (email: string, purpose: "login" | "register") => Promise<SendOtpResult>;
+  verifyOtp: (input: {
+    email: string;
+    code: string;
+    name?: string;
+    mobile?: string;
+  }) => Promise<string | null>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
 };
@@ -52,18 +63,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const register = async (name: string, email: string, password: string) => {
+  const sendOtp = async (email: string, purpose: "login" | "register") => {
     try {
-      const data = await api<{ user: User }>("/api/auth/register", {
+      const data = await api<{ ok: boolean; devCode?: string }>("/api/auth/otp/send", {
         method: "POST",
-        body: JSON.stringify({ name, email, password }),
+        body: JSON.stringify({ email, purpose }),
+      });
+      return { ok: true as const, devCode: data.devCode };
+    } catch (e) {
+      return {
+        ok: false as const,
+        error: e instanceof Error ? e.message : "Couldn't send the code.",
+      };
+    }
+  };
+
+  const verifyOtp = async (input: {
+    email: string;
+    code: string;
+    name?: string;
+    mobile?: string;
+  }) => {
+    try {
+      const data = await api<{ user: User }>("/api/auth/otp/verify", {
+        method: "POST",
+        body: JSON.stringify(input),
       });
       setUser(data.user);
-      toast.success(`Welcome to Dryfruit Adda, ${data.user.name.split(" ")[0]}!`);
+      toast.success(`Welcome, ${data.user.name.split(" ")[0]}!`);
       window.dispatchEvent(new Event("dfa-auth"));
       return null;
     } catch (e) {
-      return e instanceof Error ? e.message : "Registration failed.";
+      return e instanceof Error ? e.message : "Invalid code.";
     }
   };
 
@@ -77,7 +108,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <Ctx.Provider value={{ user, loading, login, register, logout, refresh }}>
+    <Ctx.Provider value={{ user, loading, login, sendOtp, verifyOtp, logout, refresh }}>
       {children}
     </Ctx.Provider>
   );

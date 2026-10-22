@@ -10,19 +10,6 @@ const BASE_URL = process.env.TEST_BASE_URL ?? "http://localhost:3100";
  * Uses a throwaway account per run so runs are independent and idempotent.
  */
 
-const STAMP = Date.now().toString(36);
-const EMAIL = `e2e-cust-${STAMP}@example.com`;
-const PASS = "E2eCustomer!2026";
-
-async function register(page: Page) {
-  await page.goto("/register");
-  await page.getByLabel(/full name/i).fill("E2E Customer");
-  await page.getByLabel(/email/i).fill(EMAIL);
-  await page.getByLabel(/password/i).first().fill(PASS);
-  await page.getByRole("button", { name: /create account|register|sign up/i }).click();
-  await page.waitForURL(/\/(account|shop)?$/, { timeout: 20_000 }).catch(() => {});
-}
-
 test.describe("customer purchase journey", () => {
   test("can browse, add to cart, change qty and reach checkout", async ({ page }) => {
     // ---- browse home ----
@@ -74,8 +61,10 @@ test.describe("customer purchase journey", () => {
     const cookie = (Array.isArray(setCookie) ? setCookie[0] : setCookie).match(/dfa_session=([^;]+)/);
     assert(cookie, "could not obtain a session cookie");
 
+    // Origin page se lo — port-agnostic (CI 3001 / local 3100 dono chalein)
+    const origin = new URL(page.url()).origin;
     await page.context().addCookies([
-      { name: "dfa_session", value: cookie[1], url: BASE_URL },
+      { name: "dfa_session", value: cookie[1], url: origin },
     ]);
 
     const products = await page.request.get("/api/products?limit=1");
@@ -103,8 +92,11 @@ test.describe("customer purchase journey", () => {
 
   test("login form rejects empty submit and shows validation", async ({ page }) => {
     await page.goto("/login");
-    await page.getByRole("button", { name: /^login$/i }).click();
+    // Passwordless flow — email stage ka button "Send OTP"
+    await page.getByRole("button", { name: /send otp/i }).click();
     await expect(page).toHaveURL(/\/login/);
+    // .first() — Next.js ka route-announcer bhi role=alert rakhta hai
+    await expect(page.getByRole("alert").first()).toBeVisible();
   });
 
   test("unauthenticated user cannot reach account data", async ({ page }) => {
