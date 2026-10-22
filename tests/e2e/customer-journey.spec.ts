@@ -1,6 +1,8 @@
 import { expect, test } from "@playwright/test";
 
 test("customer can browse products, login, and reach checkout", async ({ page }) => {
+  // Dev server + order POST slow ho sakta hai — budget double
+  test.setTimeout(90_000);
   await page.goto("/");
   await expect(page.getByRole("heading", { name: /nature's finest/i })).toBeVisible();
 

@@ -8,11 +8,40 @@ import { deliverBroadcast } from "@/lib/server/broadcast";
 import { newId } from "@/lib/server/crypto";
 
 export const runtime = "nodejs";
+// Lazy-delivery me 106 emails bhejne me 10s+ lag sakte hain (Hobby plan par
+// default function timeout chhoti hoti hai).
+export const maxDuration = 60;
 
 // GET /api/admin/broadcasts — sab broadcasts (newest first)
 export async function GET(req: NextRequest) {
   const { status } = await requireAdmin(req);
   if (status !== 200) return NextResponse.json({ error: ADMIN_DENIED(status) }, { status });
+
+  // Vercel Hobby plan me cron sirf 1 din me 1 baar chal sakta hai — isliye due
+  // scheduled broadcasts admin panel khulte hi deliver ho jate hain. Cron (daily)
+  // sirf unattended fallback hai.
+  const snapshot = await readDb();
+  const due = (snapshot.broadcasts ?? []).filter(
+    (b) =>
+      b.status === "scheduled" &&
+      b.scheduledAt &&
+      Date.parse(b.scheduledAt) <= Date.now(),
+  );
+  for (const b of due) {
+    try {
+      await deliverBroadcast(b, "auto:scheduler");
+    } catch (e) {
+      console.error(
+        JSON.stringify({
+          level: "error",
+          msg: "broadcast lazy-send failed",
+          id: b.id,
+          error: e instanceof Error ? e.message : String(e),
+        }),
+      );
+    }
+  }
+
   const db = await readDb();
   const list = [...(db.broadcasts ?? [])].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   return NextResponse.json({ broadcasts: list, count: list.length, mailerConfigured: mailerConfigured() });
