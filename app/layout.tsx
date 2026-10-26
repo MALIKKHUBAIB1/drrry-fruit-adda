@@ -52,7 +52,11 @@ const orgJsonLd = {
   url: siteUrl,
   logo: absUrl("/favicon.png"),
   description: SITE_DESCRIPTION,
-  sameAs: ["https://www.instagram.com/dryfruitadda_1", "https://www.facebook.com/share/1ePTjcvYds/"],
+  sameAs: [
+    "https://www.instagram.com/dryfruitadda_1",
+    "https://www.facebook.com/share/1ePTjcvYds/",
+    "https://www.youtube.com/@dryfruitadda",
+  ],
 };
 
 const siteJsonLd = {

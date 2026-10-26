@@ -12,7 +12,7 @@ export function Footer() {
           <div className="mt-4 flex gap-3 text-gold">
             <a href="https://www.instagram.com/dryfruitadda_1" target="_blank" rel="noopener noreferrer" aria-label="Instagram"><Instagram className="h-5 w-5" /></a>
             <a href="https://www.facebook.com/share/1ePTjcvYds/" target="_blank" rel="noopener noreferrer" aria-label="Facebook"><Facebook className="h-5 w-5" /></a>
-            <a href="#" aria-label="YouTube"><Youtube className="h-5 w-5" /></a>
+            <a href="https://www.youtube.com/@dryfruitadda" target="_blank" rel="noopener noreferrer" aria-label="YouTube"><Youtube className="h-5 w-5" /></a>
           </div>
         </div>
         <div>

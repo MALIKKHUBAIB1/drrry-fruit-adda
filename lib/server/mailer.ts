@@ -1,23 +1,40 @@
 import "server-only";
-import { Resend } from "resend";
+import nodemailer, { type Transporter } from "nodemailer";
 
-// Resend — transactional + broadcast email.
+// SMTP — transactional + broadcast email.
 //
-// RESEND_API_KEY missing ho toh mailer DRY RUN mode me chalta hai: kuch
-// bhejta nahi, sirf structured log likhta hai. Isse dev/prod me bina key ke
+// SMTP_HOST missing ho toh mailer DRY RUN mode me chalta hai: kuch
+// bhejta nahi, sirf structured log likhta hai. Isse dev/prod me bina SMTP ke
 // bhi poora broadcast flow test ho jata hai, aur koi crash nahi hota.
-const apiKey = process.env.RESEND_API_KEY?.trim();
-const from =
-  process.env.RESEND_FROM?.trim() || "Dryfruit Adda <onboarding@resend.dev>";
+const host = process.env.SMTP_HOST?.trim();
+const port = Number(process.env.SMTP_PORT?.trim() || "587");
+const secureSetting = process.env.SMTP_SECURE?.trim().toLowerCase();
+const secure = secureSetting ? secureSetting === "true" : port === 465;
+const user = process.env.SMTP_USER?.trim();
+const pass = process.env.SMTP_PASS;
+const from = process.env.SMTP_FROM?.trim() || "Dryfruit Adda <no-reply@dryfruitadda.in>";
 
 export function mailerConfigured(): boolean {
-  return Boolean(apiKey);
+  return Boolean(host);
 }
 
-let instance: Resend | null = null;
-function resend(): Resend {
-  if (!apiKey) throw new Error("RESEND_API_KEY is not set");
-  if (!instance) instance = new Resend(apiKey);
+let instance: Transporter | null = null;
+function transporter(): Transporter {
+  if (!host) throw new Error("SMTP_HOST is not set");
+  if ((user && !pass) || (!user && pass)) {
+    throw new Error("SMTP_USER and SMTP_PASS must both be set when using SMTP authentication");
+  }
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error("SMTP_PORT must be a valid port number");
+  }
+  if (!instance) {
+    instance = nodemailer.createTransport({
+      host,
+      port,
+      secure,
+      ...(user && pass ? { auth: { user, pass } } : {}),
+    });
+  }
   return instance;
 }
 
@@ -37,13 +54,13 @@ export async function sendEmail(opts: {
 }): Promise<SendResult> {
   const to = Array.isArray(opts.to) ? opts.to : [opts.to];
 
-  // Dry run — key nahi hai. Log karke "success" return karte hain taaki
+  // Dry run — host nahi hai. Log karke "success" return karte hain taaki
   // broadcast flow aage badhe aur dev me error na aaye.
-  if (!apiKey) {
+  if (!host) {
     console.log(
       JSON.stringify({
         level: "info",
-        msg: "email dry-run (no RESEND_API_KEY)",
+        msg: "email dry-run (no SMTP_HOST)",
         to: to.length === 1 ? to[0] : `${to.length} recipients`,
         subject: opts.subject,
       }),
@@ -52,9 +69,7 @@ export async function sendEmail(opts: {
   }
 
   try {
-    // html/text hamesha set rakhte hain — Resend ka type union warna
-    // template-branch maangta hai.
-    const res = await resend().emails.send({
+    const res = await transporter().sendMail({
       from,
       to,
       subject: opts.subject,
@@ -62,10 +77,7 @@ export async function sendEmail(opts: {
       ...(opts.text ? { text: opts.text } : {}),
       ...(opts.replyTo ? { replyTo: opts.replyTo } : {}),
     });
-    if (res.error) {
-      return { ok: false, dryRun: false, error: res.error.message };
-    }
-    return { ok: true, dryRun: false, id: res.data?.id };
+    return { ok: true, dryRun: false, id: res.messageId };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error(JSON.stringify({ level: "error", msg: "sendEmail failed", error: msg }));
@@ -132,6 +144,8 @@ export function wrapEmail(title: string, bodyHtml: string): string {
         <a href="https://www.instagram.com/dryfruitadda_1" style="color:#8a7d6d">Instagram</a>
         &nbsp;&middot;&nbsp;
         <a href="https://www.facebook.com/share/1ePTjcvYds/" style="color:#8a7d6d">Facebook</a>
+        &nbsp;&middot;&nbsp;
+        <a href="https://www.youtube.com/@dryfruitadda" style="color:#8a7d6d">YouTube</a>
         &nbsp;&middot;&nbsp;
         <a href="https://dryfruitadda.in" style="color:#8a7d6d">dryfruitadda.in</a>
       </p>
