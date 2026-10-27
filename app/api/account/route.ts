@@ -102,6 +102,6 @@ export async function DELETE(req: NextRequest) {
   }
 
   const res = NextResponse.json({ ok: true });
-  res.headers.append("Set-Cookie", clearSessionCookie());
+  res.headers.append("Set-Cookie", clearSessionCookie(req));
   return res;
 }

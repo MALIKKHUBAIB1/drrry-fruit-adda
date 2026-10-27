@@ -58,6 +58,6 @@ export async function POST(req: Request) {
   });
 
   const res = NextResponse.json({ user: publicUser(user) }, { status: 201 });
-  res.headers.set("Set-Cookie", sessionCookie(token, expiresAt));
+  res.headers.set("Set-Cookie", sessionCookie(token, expiresAt, req));
   return res;
 }

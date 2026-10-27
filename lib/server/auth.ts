@@ -11,16 +11,29 @@ export function sessionExpiry() {
   return new Date(Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000).toISOString();
 }
 
-export function sessionCookie(token: string, expiresAt: string) {
+/** Request actually HTTPS par aayi ya nahi (Vercel par x-forwarded-proto, warna URL). */
+export function requestIsHttps(req: Request) {
+  const fwd = req.headers.get("x-forwarded-proto");
+  if (fwd) return fwd.split(",")[0].trim() === "https";
+  try {
+    return new URL(req.url).protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+export function sessionCookie(token: string, expiresAt: string, req?: Request) {
   const expires = new Date(expiresAt);
-  // Secure: HTTPS pe hi bhejo. Localhost pe cookie chalti rahegi (browsers
-  // http://localhost ko secure context maante hain).
-  const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
+  // Secure: sirf real HTTPS par. http://localhost (next start) par Secure cookie
+  // browser reject kar deta hai — tab login dikhta hai par session lagta hi nahi.
+  const https = req ? requestIsHttps(req) : process.env.NODE_ENV === "production";
+  const secure = https ? "; Secure" : "";
   return `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax${secure}; Expires=${expires.toUTCString()}`;
 }
 
-export function clearSessionCookie() {
-  const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
+export function clearSessionCookie(req?: Request) {
+  const https = req ? requestIsHttps(req) : process.env.NODE_ENV === "production";
+  const secure = https ? "; Secure" : "";
   return `${SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax${secure}; Max-Age=0`;
 }
 
