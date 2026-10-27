@@ -25,7 +25,7 @@ type Entry = { at: number; data: unknown };
  * stale cache). 8s par reject karke entry free karte hain.
  */
 function fetchWithTimeout(url: string, ms = 8000) {
-  return fetch(url, { signal: AbortSignal.timeout(ms) });
+  return fetch(url, { signal: AbortSignal.timeout(ms), cache: "no-store" });
 }
 
 const memory = new Map<string, Entry>();

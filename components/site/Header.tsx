@@ -8,6 +8,7 @@ import { products } from "@/lib/products";
 import { useStore } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
 import { useCatalog } from "@/lib/catalog";
+import { NotificationBell } from "@/components/site/NotificationBell";
 
 const nav: { label: string; href: string }[] = [
   { label: "Home", href: "/" },
@@ -145,6 +146,7 @@ export function Header({ announcements }: { announcements?: string[] }) {
                 </span>
               )}
             </Link>
+            <NotificationBell />
             <button
               onClick={() => setCartOpen(true)}
               aria-label="Open cart"

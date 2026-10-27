@@ -4,13 +4,16 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { ShieldAlert } from "lucide-react";
+import { toast } from "sonner";
 import { useAuth } from "@/lib/auth";
 import { bustCache } from "@/lib/apiCache";
+import { useCatalog } from "@/lib/catalog";
 import { categories, inr, DEFAULT_DELIVERY_OPTIONS, etaLabel } from "@/lib/products";
 import { cn } from "@/lib/utils";
 import ImageUploadButton from "@/components/admin/ImageUploadButton";
 import HeroBannerEditor from "@/components/admin/HeroBannerEditor";
 import BroadcastsTab from "@/components/admin/BroadcastsTab";
+import NotificationBell from "@/components/site/NotificationBell";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, PieChart, Pie, Cell, Legend, LineChart, Line } from "recharts";
 
 async function j(path: string, init?: RequestInit) {
@@ -122,9 +125,12 @@ export default function AdminContent() {
           {tab === "Messages" && "Contact messages and subscribers."}
           {tab === "Reviews" && "Moderate customer reviews."}
         </p>
-        <button onClick={load} className="rounded-md border border-input bg-background px-4 py-2 text-sm hover:border-gold">
-          Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          <NotificationBell />
+          <button onClick={load} className="rounded-md border border-input bg-background px-4 py-2 text-sm hover:border-gold">
+            Refresh
+          </button>
+        </div>
       </div>
       {err && (
         <p role="alert" className="mb-4 rounded-md border border-destructive/25 bg-destructive/[0.06] px-4 py-2.5 text-sm text-destructive">
@@ -387,7 +393,6 @@ function MiniKpi({ label, value, sub, warn }: { label: string; value: number; su
 type DraftOrder = {
   status: string;
   trackingNumber: string;
-  trackingUrl: string;
   adminNote: string;
 };
 
@@ -421,7 +426,6 @@ function OrdersTab({ orders, reload }: { orders: any[]; reload: () => void }) {
     draft[o.id] ?? {
       status: o.status,
       trackingNumber: o.trackingNumber ?? "",
-      trackingUrl: o.trackingUrl ?? "",
       adminNote: o.adminNote ?? "",
     };
 
@@ -555,15 +559,6 @@ function OrdersTab({ orders, reload }: { orders: any[]; reload: () => void }) {
                       />
                     </label>
                     <label className="text-sm font-medium sm:col-span-2">
-                      <span className="text-xs uppercase tracking-wider text-muted-foreground">Tracking link (optional)</span>
-                      <input
-                        value={d.trackingUrl}
-                        onChange={(e) => setField(o.id, o, { trackingUrl: e.target.value })}
-                        placeholder="https://"
-                        className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                      />
-                    </label>
-                    <label className="text-sm font-medium sm:col-span-2">
                       <span className="text-xs uppercase tracking-wider text-muted-foreground">Note for customer</span>
                       <textarea
                         value={d.adminNote}
@@ -690,6 +685,7 @@ const fromProduct = (p: any): ProductForm => ({
 
 
 function ProductsTab({ products, cats, reload }: { products: any[]; cats: any[]; reload: () => void }) {
+  const { refreshCatalog } = useCatalog();
   const [editor, setEditor] = useState<{ isNew: boolean; slugTouched: boolean; form: ProductForm } | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -774,6 +770,9 @@ function ProductsTab({ products, cats, reload }: { products: any[]; cats: any[];
       });
       setEditor(null);
       reload();
+      toast.success("Product saved — live on the website now");
+      bustCache("/api/products");
+      void refreshCatalog();
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Couldn't save product.");
     } finally {
@@ -788,11 +787,15 @@ function ProductsTab({ products, cats, reload }: { products: any[]; cats: any[];
       body: JSON.stringify({ ...p, inStock: !p.inStock }),
     });
     reload();
+    bustCache("/api/products");
+    void refreshCatalog();
   };
   const remove = async (slug: string) => {
     if (!confirm(`Delete ${slug}? This cannot be undone.`)) return;
     await j(`/api/admin/products?slug=${slug}`, { method: "DELETE" });
     reload();
+    bustCache("/api/products");
+    void refreshCatalog();
   };
 
   const F = "w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-gold";
@@ -939,9 +942,28 @@ function ProductsTab({ products, cats, reload }: { products: any[]; cats: any[];
                 </button>
               </div>
               <p className="mt-1.5 text-xs text-muted-foreground">
-                Available files: https://ik.imagekit.io/kjm6lzdqi/dryfruitadda/products/almonds_UOTtyTDyL.jpg, cashews.jpg, pistachios.jpg, walnuts.jpg,
-                dates.jpg, figs.jpg, raisins.jpg, mixed.jpg, seeds.jpg, gift.jpg
+                Existing ImageKit files — click a file to fill the first empty image slot:
               </p>
+              <div className="mt-1 flex flex-wrap gap-1">
+                {["almonds_UOTtyTDyL.jpg", "cashews.jpg", "pistachios.jpg", "walnuts.jpg", "dates.jpg", "figs.jpg", "raisins.jpg", "mixed.jpg", "seeds.jpg", "gift.jpg"].map((f) => (
+                  <button
+                    key={f}
+                    type="button"
+                    title={`Use ${f}`}
+                    onClick={() => {
+                      const url = `https://ik.imagekit.io/kjm6lzdqi/dryfruitadda/products/${f}`;
+                      const imgs = [...editor.form.images];
+                      const empty = imgs.findIndex((x) => !x.trim());
+                      if (empty >= 0) imgs[empty] = url;
+                      else imgs.push(url);
+                      set({ images: imgs });
+                    }}
+                    className="rounded border border-border bg-secondary/40 px-2 py-0.5 font-mono text-[11px] hover:border-gold hover:text-gold"
+                  >
+                    {f}
+                  </button>
+                ))}
+              </div>
             </div>
             <label className="text-sm font-medium">
               <span className={L}>Rating (0–5)</span>
@@ -1727,6 +1749,7 @@ function PromoTab({
   announcements: string[];
   reload: () => void;
 }) {
+  const { refreshCatalog } = useCatalog();
   const [ann] = useState<string[]>(announcements);
   const [annDirty] = useState(false);
   const [form, setForm] = useState<any>(null);
@@ -1775,6 +1798,9 @@ function PromoTab({
         }),
       });
       reload();
+      toast.success("Promo banner saved — live on the home page now");
+      bustCache("/api/settings");
+      void refreshCatalog();
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Couldn't save.");
     } finally {
@@ -1834,10 +1860,6 @@ function PromoTab({
           {busy ? "Saving…" : "Save banner"}
         </button>
       </div>
-
-      <p className="text-xs text-muted-foreground">
-        Banner home page par hero ke baad dikhega, expiry tak live countdown chalega. Disable karne par gayab ho jayega.
-      </p>
     </form>
   );
 }

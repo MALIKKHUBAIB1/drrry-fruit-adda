@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Award, Headphones, Leaf, Package, ShieldCheck, Truck } from "lucide-react";
 import { NewsletterForm } from "@/components/site/Newsletter";
+import { AvailableOffers } from "@/components/site/AvailableOffers";
 import { BestSellers, CategoriesGrid, GiftHampers, HomeTestimonials, NewArrivals } from "@/components/site/HomeSections";
 import { PromoBanner } from "@/components/site/PromoBanner";
 import { DEFAULT_OG_IMAGE, SITE_DESCRIPTION, SITE_NAME, SITE_TAGLINE } from "@/lib/seo";
@@ -88,6 +89,13 @@ export default async function Home() {
 
       {/* Promo banner (admin manageable) */}
       <PromoBanner />
+
+      {/* Available offer codes (admin coupons, live from DB) */}
+      <section className="border-y border-gold/25 bg-gold/[0.07]">
+        <div className="mx-auto max-w-7xl px-4 py-4">
+          <AvailableOffers />
+        </div>
+      </section>
 
       {/* Categories */}
       <section className="mx-auto max-w-7xl px-4 py-20">

@@ -2,8 +2,9 @@ import { NextResponse, type NextRequest } from "next/server";
 import { updateDb, type DbOrder } from "@/lib/server/db";
 import { ADMIN_DENIED, requireAdmin } from "@/lib/server/admin";
 import { cleanText, readJsonSafe, safeUrl, sameOrigin } from "@/lib/server/security";
-import { ORDER_STATUSES, isOrderStatus, publish } from "@/lib/server/events";
+import { ORDER_STATUSES, STATUS_LABEL, isOrderStatus, publish } from "@/lib/server/events";
 import { sendOrderStatusEmail } from "@/lib/server/ordermail";
+import { notify } from "@/lib/server/notifications";
 
 // PATCH /api/admin/orders/:id — status / tracking number / note update
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -83,6 +84,27 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           msg: "order status email crashed",
           orderId: result.order.id,
           status: result.order.status,
+          error: e instanceof Error ? e.message : String(e),
+        }),
+      );
+    }
+    // In-app notification — customer ko status/note update.
+    try {
+      await notify({
+        audience: "user",
+        userId: result.order.userId,
+        title: `Order ${result.order.id}: ${STATUS_LABEL[result.order.status]}`,
+        body:
+          result.order.adminNote ||
+          (result.order.trackingNumber ? `Tracking number: ${result.order.trackingNumber}` : undefined),
+        link: "/account",
+      });
+    } catch (e) {
+      console.error(
+        JSON.stringify({
+          level: "error",
+          msg: "order status notification crashed",
+          orderId: result.order.id,
           error: e instanceof Error ? e.message : String(e),
         }),
       );

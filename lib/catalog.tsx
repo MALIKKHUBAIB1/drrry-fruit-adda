@@ -65,6 +65,7 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
 
   const load = useCallback(async (force = false) => {
+    if (force) bustCache();
     const [p, c, s] = await Promise.all([
       cachedGet<{ products: Product[] }>("/api/products"),
       cachedGet<{ categories: CatalogCtx["categories"] }>("/api/categories"),
@@ -80,7 +81,6 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
         promo: s.data.settings.promo ?? null,
       });
     }
-    if (force) bustCache();
     setReady(true);
   }, []);
 

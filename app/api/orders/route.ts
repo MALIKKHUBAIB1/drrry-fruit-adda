@@ -2,9 +2,10 @@ import { NextResponse, type NextRequest } from "next/server";
 import { readDb, updateDb, type DbOrder } from "@/lib/server/db";
 import { getSessionUser, newId } from "@/lib/server/auth";
 import { couponStatus } from "@/lib/server/db";
-import { optionsOf } from "@/lib/products";
+import { inr, optionsOf } from "@/lib/products";
 import { shippingForPin } from "@/lib/server/pincode";
 import { sendOrderStatusEmail } from "@/lib/server/ordermail";
+import { notify } from "@/lib/server/notifications";
 import {
   cleanText,
   isValidEmail,
@@ -192,5 +193,35 @@ export async function POST(req: NextRequest) {
       );
     }
   }
+
+  // In-app notifications — admin ko new order, customer ko confirmation.
+  try {
+    const itemsLine = order.items.map((it) => `${it.name} ×${it.qty}`).join(", ");
+    await Promise.all([
+      notify({
+        audience: "admin",
+        title: `New order ${order.id}`,
+        body: `${order.name} · ${inr(order.total)} · ${itemsLine}`,
+        link: "/admin?tab=Orders",
+      }),
+      notify({
+        audience: "user",
+        userId: order.userId,
+        title: `Order ${order.id} placed`,
+        body: `Thanks for your order! Total ${inr(order.total)}. We'll update you here as it moves.`,
+        link: "/account",
+      }),
+    ]);
+  } catch (e) {
+    console.error(
+      JSON.stringify({
+        level: "error",
+        msg: "order notifications crashed",
+        orderId: order.id,
+        error: e instanceof Error ? e.message : String(e),
+      }),
+    );
+  }
+
   return NextResponse.json({ order }, { status: 201 });
 }

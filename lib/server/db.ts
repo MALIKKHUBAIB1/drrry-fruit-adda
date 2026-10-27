@@ -68,6 +68,19 @@ export type DbCoupon = {
   usedCount?: number;
 };
 
+export type DbNotification = {
+  id: string;
+  /** admin = sab admins ko dikhta hai; user = sirf userId wale ko */
+  audience: "admin" | "user";
+  userId?: string;
+  title: string;
+  body?: string;
+  link?: string;
+  /** jin users ne padh liya (admin docs across admins share hoti hain) */
+  readBy: string[];
+  createdAt: string;
+};
+
 export type OrderItem = {
   slug: string;
   name: string;
@@ -262,6 +275,7 @@ export type DbShape = {
   newsletter: DbSubscriber[];
   broadcasts: DbBroadcast[];
   otps: DbOtp[];
+  notifications: DbNotification[];
   carts: Record<string, CartItem[]>;
   wishlists: Record<string, string[]>;
 };
@@ -475,6 +489,7 @@ function seed(): DbShape {
     broadcasts: [],
     otps: [],
     pincodes: seedPincodes(),
+    notifications: [],
     hiddenPincodes: [],
     coupons: [
       {
@@ -696,6 +711,7 @@ function normalize(db: Partial<DbShape>): DbShape {
     carts: db.carts ?? {},
     wishlists: db.wishlists ?? {},
     broadcasts: db.broadcasts ?? [],
+    notifications: db.notifications ?? [],
   };
 }
 
