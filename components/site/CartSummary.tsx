@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { BadgeCheck, Lock, Ticket, Truck } from "lucide-react";
 import { inr } from "@/lib/products";
-import { COUPONS, SHIPPING_FREE_ABOVE, useStore } from "@/lib/store";
+import { SHIPPING_FREE_ABOVE, useStore } from "@/lib/store";
 
 export function FreeShippingBar({ compact }: { compact?: boolean }) {
   const { subtotal, discount } = useStore();

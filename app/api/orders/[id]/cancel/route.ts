@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { readDb, updateDb } from "@/lib/server/db";
 import { getSessionUser } from "@/lib/server/auth";
-import { cleanText, readJsonSafe, sameOrigin } from "@/lib/server/security";
+import { cleanText, sameOrigin } from "@/lib/server/security";
 import { publish } from "@/lib/server/events";
 import { issueOrderRefund, type RefundOutcome } from "@/lib/server/refunds";
 

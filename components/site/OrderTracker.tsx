@@ -10,7 +10,6 @@ import {
   Radio,
   Search,
   Truck,
-  Wallet,
 } from "lucide-react";
 import { inr } from "@/lib/products";
 import { useAuth } from "@/lib/auth";

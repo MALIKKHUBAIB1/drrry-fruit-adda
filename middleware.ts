@@ -1,5 +1,4 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { getSessionUser } from "@/lib/server/auth";
 
 // Admin routes protect karo: /admin/login allow, baaki sab admin-only.
 export function middleware(req: NextRequest) {

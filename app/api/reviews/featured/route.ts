@@ -1,7 +1,5 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 import { readDb } from "@/lib/server/db";
-import { getSessionUser } from "@/lib/server/auth";
-import { cleanText } from "@/lib/server/security";
 
 // GET /api/reviews/featured?limit=3 — home page testimonials ke liye best reviews
 // Public GET responses browser/CDN cache kar sake — isse repeat visits par

@@ -90,7 +90,7 @@ function Steps({ step }: { step: number }) {
 
 export default function CheckoutContent() {
   const { get: getProduct } = useCatalog();
-  const { cart, clear, subtotal, discount, shipping, total, coupon } = useStore();
+  const { cart, clear, subtotal, discount, shipping, coupon } = useStore();
   const { user, loading } = useAuth();
   const [pay, setPay] = useState("cod");
 

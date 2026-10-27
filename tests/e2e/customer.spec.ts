@@ -1,7 +1,5 @@
 import assert from "node:assert/strict";
-import { test, expect, type Page } from "@playwright/test";
-
-const BASE_URL = process.env.TEST_BASE_URL ?? "http://localhost:3100";
+import { test, expect } from "@playwright/test";
 
 /**
  * Customer critical journey:

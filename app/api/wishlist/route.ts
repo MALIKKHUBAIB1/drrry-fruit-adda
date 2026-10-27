@@ -5,7 +5,6 @@ import {
   cleanText,
   readJsonSafe,
   sameOrigin,
-  toInt,
 } from "@/lib/server/security";
 
 // GET /api/wishlist — user ki wishlist

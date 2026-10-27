@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { CheckCircle2, ChevronDown, ChevronRight, Heart, KeyRound, Loader2, LogOut, Mail, MapPin, Package, Pencil, Plus, ShoppingBag, Trash2, TriangleAlert, Truck, User as UserIcon, X } from "lucide-react";
+import { ChevronDown, ChevronRight, Heart, KeyRound, Loader2, LogOut, Mail, MapPin, Package, Pencil, Plus, ShoppingBag, Trash2, TriangleAlert, Truck, User as UserIcon, X } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useStore } from "@/lib/store";
 import { inr } from "@/lib/products";
@@ -112,7 +112,6 @@ export default function AccountContent() {
     loadOrders();
     loadAddresses();
     if (user) setName(user.name);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   const stats = useMemo(() => {

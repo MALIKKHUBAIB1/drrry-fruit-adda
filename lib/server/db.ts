@@ -723,8 +723,6 @@ export function invalidateDbCache() {
   cache = null;
 }
 
-type Row = Record<string, unknown>;
-
 async function loadAll(): Promise<{ db: DbShape; version: number }> {
   const { metaCol, ARRAY_COLLECTIONS, META_ID } = await import("./mongo");
   const mc = await metaCol();

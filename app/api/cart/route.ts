@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { readDb, updateDb, type CartItem } from "@/lib/server/db";
+import { readDb, updateDb } from "@/lib/server/db";
 import { getSessionUser } from "@/lib/server/auth";
 import {
   cleanText,

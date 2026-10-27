@@ -6,17 +6,6 @@ import { useSettings } from "@/lib/catalog";
 import { Check, Copy, Gift, Timer } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type Promo = {
-  enabled: boolean;
-  title: string;
-  subtitle: string;
-  couponCode: string;
-  expiresAt: string;
-  ctaLabel: string;
-  ctaHref: string;
-  bgColor: string;
-};
-
 function useCountdown(target: string) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {

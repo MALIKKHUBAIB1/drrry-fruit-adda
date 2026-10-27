@@ -260,7 +260,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // Auto-drop coupon if cart falls below its minimum.
   useEffect(() => {
     if (coupon && activeCoupon && subtotal < activeCoupon.min) setCoupon(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subtotal, coupon]);
 
   const clear = () => {

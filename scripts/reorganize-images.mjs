@@ -64,7 +64,7 @@ for (const oldUrl of Object.keys(oldMap)) {
 }
 
 console.log(`planned ${Object.keys(plan).length} images -> /dryfruitadda/${YEAR}/{category}/`);
-for (const [oldUrl, p] of Object.entries(plan)) {
+for (const [, p] of Object.entries(plan)) {
   console.log(`  ${p.local.padEnd(14)} -> ${p.folder}/`);
 }
 

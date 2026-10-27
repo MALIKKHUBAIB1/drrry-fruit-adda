@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { getCategories, getProducts } from "@/lib/server/db";
 import {
   cleanText,
-  toFloat,
   toInt,
 } from "@/lib/server/security";
 

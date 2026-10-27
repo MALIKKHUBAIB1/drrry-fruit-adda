@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { readDb, updateDb } from "@/lib/server/db";
 import { ADMIN_DENIED, requireAdmin } from "@/lib/server/admin";
-import { cleanText, readJsonSafe, sameOrigin } from "@/lib/server/security";
+import { cleanText, sameOrigin } from "@/lib/server/security";
 
 // GET /api/admin/reviews?slug=
 export async function GET(req: NextRequest) {

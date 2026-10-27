@@ -21,7 +21,7 @@ export default function ShopContent() {
   const [drawer, setDrawer] = useState(false);
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState(fallbackCategories);
-  const [groups, setGroups] = useState<Record<string, string>>(fallbackGroups);
+  const [groups] = useState<Record<string, string>>(fallbackGroups);
   const [loading, setLoading] = useState(true);
 
   const q = searchParams.get("q") ?? undefined;
@@ -50,7 +50,6 @@ export default function ShopContent() {
     return () => {
       alive = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
   const set = (patch: Record<string, string | undefined>) => {
@@ -72,7 +71,6 @@ export default function ShopContent() {
         (!inStockOnly || p.inStock) &&
         (p.variants[0] ? p.variants[0].price <= maxPrice : true),
     );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [products, wishlist, inStockOnly, maxPrice]);
 
   const title = category ? categories.find((c) => c.slug === category)?.name : group ? groups[group] : q ? `Results for “${q}”` : "Shop All";

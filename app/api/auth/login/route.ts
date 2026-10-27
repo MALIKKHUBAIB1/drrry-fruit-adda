@@ -7,7 +7,7 @@ import {
   sessionExpiry,
   verifyPassword,
 } from "@/lib/server/auth";
-import { cleanText, clientIp, isValidEmail, rateLimit, readJsonSafe, sameOrigin } from "@/lib/server/security";
+import { clientIp, isValidEmail, rateLimit, readJsonSafe, sameOrigin } from "@/lib/server/security";
 
 // POST /api/auth/login { email, password }
 export async function POST(req: NextRequest) {

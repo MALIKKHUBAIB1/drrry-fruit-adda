@@ -3,7 +3,6 @@ import { readDb, updateDb } from "@/lib/server/db";
 import { getSessionUser, newId } from "@/lib/server/auth";
 import {
   cleanText,
-  isValidEmail,
   readJsonSafe,
   sameOrigin,
   toInt,

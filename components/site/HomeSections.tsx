@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Star } from "lucide-react";
-import { categories as fallbackCategories, products as fallbackProducts, type Product } from "@/lib/products";
+import { categories as fallbackCategories, products as fallbackProducts } from "@/lib/products";
 import { ProductCard } from "@/components/site/ProductCard";
 import { useCatalog } from "@/lib/catalog";
 import { cachedGet } from "@/lib/apiCache";

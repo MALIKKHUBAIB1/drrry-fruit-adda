@@ -8,7 +8,7 @@
 //
 // Idempotent: jo image pehle se upload ho chuki ho aur mapping file me ho,
 // dobara upload nahi karta (purane URLs reuse).
-import { readFileSync, writeFileSync, existsSync, readdirSync, mkdirSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, readdirSync } from "node:fs";
 import { join, extname } from "node:path";
 import ImageKit from "imagekit";
 

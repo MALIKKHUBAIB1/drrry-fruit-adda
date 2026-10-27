@@ -18,7 +18,11 @@ import { POST as verifyPayment } from "../../app/api/payments/verify/route.ts";
 
 type JsonBody = Record<string, unknown> | undefined;
 
-function makeRequest(url: string, init: RequestInit = {}): NextRequest {
+// RequestInit ka body plain-object accept nahi karta (TS) — lekin helper
+// andar JSON.stringify karta hai, isliye yahan relaxed type chahiye.
+type TestRequestInit = Omit<RequestInit, "body"> & { body?: JsonBody };
+
+function makeRequest(url: string, init: TestRequestInit = {}): NextRequest {
   const headers = new Headers(init.headers ?? {});
   if (!headers.has("origin")) headers.set("origin", "http://localhost");
   if (!headers.has("host")) headers.set("host", "localhost");
@@ -133,7 +137,7 @@ describe("catalog, cart, wishlist and address APIs", () => {
     assert.ok(Array.isArray(productsJson.products));
     assert.ok(productsJson.products.length > 0);
 
-    const categoriesRes = await categoriesGet(new Request("http://localhost/api/categories"));
+    const categoriesRes = await categoriesGet();
     assert.equal(categoriesRes.status, 200);
     const categoriesJson = await categoriesRes.json();
     assert.ok(Array.isArray(categoriesJson.categories));

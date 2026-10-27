@@ -18,7 +18,6 @@ const BASE = process.env.SECURITY_TEST_BASE_URL ?? "http://localhost:3100";
 const isLocal = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i.test(BASE);
 
 let ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL ?? "admin@dryfruitadda.in";
-const ADMIN_PASS = process.env.E2E_ADMIN_PASSWORD;
 const USER_PASS = "SecTest!2026";
 
 type Res = { status: number; body: any; headers: Headers };

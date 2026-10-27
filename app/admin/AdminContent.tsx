@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Plus, ShieldAlert, Trash2 } from "lucide-react";
+import { ShieldAlert } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { bustCache } from "@/lib/apiCache";
 import { categories, inr, DEFAULT_DELIVERY_OPTIONS, etaLabel } from "@/lib/products";
@@ -151,15 +151,6 @@ export default function AdminContent() {
         {tab === "Messages" && <MessagesTab contacts={contacts} subs={subs} reload={load} />}
         {tab === "Reviews" && <ReviewsTab reviews={reviews} reload={load} />}
       </div>
-    </div>
-  );
-}
-
-function Card({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-xl border border-black/[0.06] bg-white p-5 shadow-sm">
-      <p className="text-xs uppercase tracking-widest text-muted-foreground">{label}</p>
-      <p className="mt-1 font-display text-3xl font-semibold text-primary">{value}</p>
     </div>
   );
 }
@@ -1736,8 +1727,8 @@ function PromoTab({
   announcements: string[];
   reload: () => void;
 }) {
-  const [ann, setAnn] = useState<string[]>(announcements);
-  const [annDirty, setAnnDirty] = useState(false);
+  const [ann] = useState<string[]>(announcements);
+  const [annDirty] = useState(false);
   const [form, setForm] = useState<any>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -1757,66 +1748,7 @@ function PromoTab({
     }
   }, [promo, form]);
 
-  /* ---- Ticker announcements (top bar) ---- */
   const F = "w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-gold";
-
-  const annBlock = (
-    <div className="mb-6 rounded-xl border border-border bg-card p-5 shadow-sm">
-      <h3 className="font-display text-lg font-semibold">Top Ticker Messages</h3>
-      <p className="mt-1 text-sm text-muted-foreground">
-        Ye messages site ke upar wali scrolling bar me dikhti hain. Max 8.
-      </p>
-
-      <div className="mt-4 space-y-2">
-        {ann.map((m, i) => (
-          <div key={i} className="flex items-center gap-2">
-            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-secondary text-xs font-semibold">
-              {i + 1}
-            </span>
-            <input
-              value={m}
-              onChange={(e) => {
-                setAnn((a) => a.map((x, j) => (j === i ? e.target.value : x)));
-                setAnnDirty(true);
-              }}
-              maxLength={120}
-              placeholder="e.g. Free Shipping Above ₹999"
-              className={`${F} flex-1`}
-            />
-            <button
-              type="button"
-              onClick={() => {
-                setAnn((a) => a.filter((_, j) => j !== i));
-                setAnnDirty(true);
-              }}
-              className="shrink-0 rounded-md p-2 text-muted-foreground hover:bg-secondary hover:text-destructive"
-              aria-label={`Remove message ${i + 1}`}
-            >
-              <Trash2 className="h-4 w-4" />
-            </button>
-          </div>
-        ))}
-      </div>
-
-      {ann.length === 0 && (
-        <p className="mt-3 rounded-lg border border-dashed border-border p-4 text-center text-sm text-muted-foreground">
-          No messages — fallback text dikhega.
-        </p>
-      )}
-
-      <button
-        type="button"
-        disabled={ann.length >= 8}
-        onClick={() => {
-          setAnn((a) => [...a, ""]);
-          setAnnDirty(true);
-        }}
-        className="mt-3 flex items-center gap-1.5 text-sm font-medium text-primary hover:underline disabled:opacity-40"
-      >
-        <Plus className="h-4 w-4" /> Add message
-      </button>
-    </div>
-  );
 
   if (!form) return <p className="py-8 text-center text-sm text-muted-foreground">Loading…</p>;
 

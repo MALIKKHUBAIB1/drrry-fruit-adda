@@ -3,7 +3,6 @@ import { updateDb } from "@/lib/server/db";
 import { getSessionUser, publicUser } from "@/lib/server/auth";
 import {
   cleanText,
-  rateLimit,
   readJsonSafe,
   sameOrigin,
 } from "@/lib/server/security";

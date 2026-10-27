@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { readDb } from "@/lib/server/db";
 import { getSessionUser } from "@/lib/server/auth";
-import { cleanText, sameOrigin } from "@/lib/server/security";
+import { cleanText } from "@/lib/server/security";
 
 // GET /api/orders/:id — sirf apna order dekh sakte ho
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

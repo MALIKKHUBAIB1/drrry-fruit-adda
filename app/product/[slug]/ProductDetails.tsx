@@ -12,7 +12,6 @@ import {
   Minus,
   Plus,
   Star,
-  Truck,
 } from "lucide-react";
 import { useState } from "react";
 import { galleryOf, inr, type Product } from "@/lib/products";

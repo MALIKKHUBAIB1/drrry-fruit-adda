@@ -15,21 +15,6 @@ import {
   toInt,
 } from "@/lib/server/security";
 
-type OrderBody = {
-  items: { slug: string; variant: string; qty: number }[];
-  coupon?: string | null;
-  name: string;
-  phone: string;
-  email: string;
-  address: string;
-  city: string;
-  state: string;
-  pin: string;
-  notes?: string;
-  payment?: "cod" | "online";
-  deliveryOptionId?: string;
-};
-
 // GET /api/orders — apne orders (login required)
 export async function GET(req: NextRequest) {
   const user = await getSessionUser(req);
