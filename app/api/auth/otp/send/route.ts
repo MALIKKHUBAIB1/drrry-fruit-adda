@@ -40,8 +40,16 @@ export async function POST(req: NextRequest) {
 
   let devCode: string | undefined;
   if (purpose === "login" && !user) {
-    // Enumeration guard: unknown email par bhi identical response jaata hai.
-    // Andar kuch issue/send nahi hota — response content se existence leak nahi.
+    // UX: unknown email par saaf message — user ko pata chale ki pehle
+    // account banana padega (pehle silent skip hota tha, UI phir bhi
+    // "OTP sent" dikha deta tha). Enumeration trade-off owner ne accept kiya.
+    return NextResponse.json(
+      {
+        error:
+          "No account found with this email. Please create an account first — it only takes a minute.",
+      },
+      { status: 404 },
+    );
   } else {
     const code = await issueOtp(email, eff);
     const sent = await sendOtpEmail(email, code);

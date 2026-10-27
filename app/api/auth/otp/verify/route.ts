@@ -47,6 +47,18 @@ export async function POST(req: NextRequest) {
   const db = await readDb();
   const rec = db.otps.find((o) => o.id === email);
   if (!rec) {
+    // Koi OTP record hi nahi (expire/prune/galat flow). Account bhi nahi hai
+    // to seedha register ka rasta dikhao — "code hi nahi bheja tha" wali
+    // confusion khatam karne ke liye.
+    if (!db.users.some((u) => u.email === email)) {
+      return NextResponse.json(
+        {
+          error:
+            "No account found with this email. Please create an account first — it only takes a minute.",
+        },
+        { status: 404 },
+      );
+    }
     return NextResponse.json({ error: GENERIC_ERR }, { status: 401 });
   }
 
