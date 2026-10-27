@@ -243,6 +243,7 @@ export type DbHamper = {
   slug: string;
   name: string;
   image: string;
+  images?: string[]; // gallery — pehla image main (image ke barabar)
   description: string;
   highlights: string[];
   price: number;

@@ -16,7 +16,14 @@ function validateHamper(body: Record<string, unknown>, isNew: boolean) {
     ? String(body.slug).toLowerCase().trim().replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80)
     : "";
   const name = cleanText(body.name, 120);
-  const image = cleanText(body.image, 500) || "https://ik.imagekit.io/kjm6lzdqi/dryfruitadda/products/gift_JYpveUrx4.jpg";
+  const images = Array.isArray(body.images)
+    ? body.images
+        .map((u) => cleanText(String(u ?? ""), 500))
+        .filter((u) => /^https?:\/\//.test(u))
+        .slice(0, 8)
+    : [];
+  const image = images[0] || cleanText(body.image, 500) || "https://ik.imagekit.io/kjm6lzdqi/dryfruitadda/products/gift_JYpveUrx4.jpg";
+  if (!images.length) images.push(image);
   const description = cleanText(body.description, 2000);
   const highlights = Array.isArray(body.highlights)
     ? body.highlights.map((h) => cleanText(h, 120)).filter(Boolean).slice(0, 8)
@@ -48,7 +55,7 @@ function validateHamper(body: Record<string, unknown>, isNew: boolean) {
   if (description.length < 10) return { error: "Description must be at least 10 characters." };
   if (price < 1 || mrp < price) return { error: "MRP must be >= price." };
   return {
-    data: { slug, name, image, description, highlights, price, mrp, rating, reviews, badge, inStock, items, metaTitle, metaDescription },
+    data: { slug, name, image, images, description, highlights, price, mrp, rating, reviews, badge, inStock, items, metaTitle, metaDescription },
   };
 }
 

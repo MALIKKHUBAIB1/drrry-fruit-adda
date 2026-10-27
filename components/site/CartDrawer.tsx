@@ -6,7 +6,6 @@ import { inr } from "@/lib/products";
 import { useCatalog } from "@/lib/catalog";
 import { SHIPPING_FREE_ABOVE, useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
-import { AvailableOffers } from "@/components/site/AvailableOffers";
 
 export function CartLines({ compact }: { compact?: boolean }) {
   const { cart, setQty, remove, wishlist, toggleWish } = useStore();
@@ -103,7 +102,6 @@ export function CartDrawer() {
             <X className="h-5 w-5" />
           </button>
         </div>
-        <AvailableOffers compact className="border-b border-border px-5 py-2.5" />
         {cart.length === 0 ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
             <ShoppingBag className="h-12 w-12 text-gold" />

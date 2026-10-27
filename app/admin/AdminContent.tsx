@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { ShieldAlert } from "lucide-react";
+import { Search, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth";
 import { bustCache } from "@/lib/apiCache";
@@ -541,7 +541,17 @@ function OrdersTab({ orders, reload }: { orders: any[]; reload: () => void }) {
                       <span className="text-xs uppercase tracking-wider text-muted-foreground">Status</span>
                       <select
                         value={d.status}
-                        onChange={(e) => setField(o.id, o, { status: e.target.value })}
+                        onChange={(e) => {
+                          const status = e.target.value;
+                          const needsTracking = status === "shipped" || status === "out-for-delivery" || status === "delivered";
+                          setField(
+                            o.id,
+                            o,
+                            needsTracking && !d.trackingNumber.trim()
+                              ? { status, trackingNumber: String(Math.floor(1000000000 + Math.random() * 9000000000)) }
+                              : { status },
+                          );
+                        }}
                         className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                       >
                         {ORDER_STATUSES_UI.map(([k, l]) => (
@@ -746,7 +756,7 @@ function ProductsTab({ products, cats, reload }: { products: any[]; cats: any[];
           category: form.category,
           group: form.group,
           image: (form.images.find((x) => x.trim()) ?? form.image).trim() || "https://ik.imagekit.io/kjm6lzdqi/dryfruitadda/products/mixed_Cb6n5_mP1.jpg",
-          images: form.images.map((x) => x.trim()).filter(Boolean),
+          images: form.images.map((x) => x.trim()).filter(Boolean).slice(0, 8),
           rating: Math.min(5, Math.max(0, Number(form.rating) || 0)),
           badge: form.badge || undefined,
           inStock: form.inStock,
@@ -935,10 +945,11 @@ function ProductsTab({ products, cats, reload }: { products: any[]; cats: any[];
                 ))}
                 <button
                   type="button"
+                  disabled={editor.form.images.length >= 8}
                   onClick={() => set({ images: [...editor.form.images, ""] })}
-                  className="text-sm font-medium text-primary hover:underline"
+                  className="text-sm font-medium text-primary hover:underline disabled:opacity-40 disabled:no-underline"
                 >
-                  + Add another image
+                  + Add another image {editor.form.images.length >= 8 ? "(max 8)" : ""}
                 </button>
               </div>
               <p className="mt-1.5 text-xs text-muted-foreground">
@@ -1502,38 +1513,86 @@ function CouponsTab({ coupons, reload }: { coupons: any[]; reload: () => void })
 }
 
 function UsersTab({ users, reload }: { users: any[]; reload: () => void }) {
+  const [q, setQ] = useState("");
+  const filtered = users
+    .filter((u) => !q || `${u.name} ${u.email}`.toLowerCase().includes(q.toLowerCase()))
+    .sort((a, b) => String(b.createdAt ?? "").localeCompare(String(a.createdAt ?? "")));
+  const adminCount = users.filter((u) => u.isAdmin).length;
+  const fmtDate = (s?: string) => {
+    if (!s) return "—";
+    const d = new Date(s);
+    return isNaN(d.getTime()) ? "—" : d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+  };
+
   return (
-    <ul className="space-y-2">
-      {users.map((u) => (
-        <li key={u.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card p-3 text-sm">
-          <span className="min-w-0 flex-1">
-            <b>{u.name}</b> <span className="text-muted-foreground">{u.email} · {u.orders} orders</span>
-          </span>
-          {u.isAdmin ? (
-            <span className="rounded-full bg-gold/20 px-3 py-1 text-xs font-semibold text-cocoa">Admin</span>
-          ) : (
-            <button
-              onClick={async () => { await j("/api/admin/users", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: u.id, isAdmin: true }) }); reload(); }}
-              className="rounded-full border border-input px-3 py-1 text-xs hover:border-gold"
-            >
-              Make admin
-            </button>
-          )}
-          {!u.isAdmin && (
-            <button
-              onClick={async () => {
-                if (!confirm(`Delete user ${u.name} (${u.email})? This will also remove their orders, cart, wishlist, addresses and reviews.`)) return;
-                try { await j(`/api/admin/users?id=${u.id}`, { method: "DELETE" }); reload(); }
-                catch (e) { alert(e instanceof Error ? e.message : "Couldn't delete user."); }
-              }}
-              className="text-xs text-destructive hover:underline"
-            >
-              Delete
-            </button>
-          )}
-        </li>
-      ))}
-    </ul>
+    <div className="space-y-4">
+      <div className="grid gap-3 sm:grid-cols-3">
+        {[
+          { label: "Total users", value: users.length },
+          { label: "Admins", value: adminCount },
+          { label: "Customers", value: users.length - adminCount },
+        ].map((s) => (
+          <div key={s.label} className="rounded-xl border border-border bg-card p-4">
+            <p className="text-xs uppercase tracking-wider text-muted-foreground">{s.label}</p>
+            <p className="mt-1 font-display text-2xl font-semibold">{s.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Search by name or email…"
+          className="w-full rounded-md border border-input bg-background py-2 pl-9 pr-3 text-sm outline-none focus:border-gold"
+        />
+      </div>
+
+      {filtered.length === 0 ? (
+        <p className="rounded-xl border border-border bg-card py-12 text-center text-sm text-muted-foreground">
+          {q ? `No users match “${q}”.` : "No users yet."}
+        </p>
+      ) : (
+        <ul className="space-y-2">
+          {filtered.map((u) => (
+            <li key={u.id} className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card p-3 text-sm">
+              <span className={cn("grid h-10 w-10 shrink-0 place-items-center rounded-full font-semibold", u.isAdmin ? "bg-gold/25 text-cocoa" : "bg-secondary text-muted-foreground")}>
+                {(u.name || u.email || "?").charAt(0).toUpperCase()}
+              </span>
+              <span className="min-w-0 flex-1">
+                <b className="block truncate">{u.name}</b>
+                <span className="block truncate text-xs text-muted-foreground">{u.email}</span>
+              </span>
+              <span className="rounded-full bg-secondary px-2.5 py-1 text-xs text-muted-foreground">{u.orders} orders</span>
+              <span className="rounded-full bg-secondary px-2.5 py-1 text-xs text-muted-foreground">Joined {fmtDate(u.createdAt)}</span>
+              {u.isAdmin ? (
+                <span className="rounded-full bg-gold/20 px-3 py-1 text-xs font-semibold text-cocoa">Admin</span>
+              ) : (
+                <button
+                  onClick={async () => { await j("/api/admin/users", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: u.id, isAdmin: true }) }); reload(); }}
+                  className="rounded-full border border-input px-3 py-1 text-xs hover:border-gold"
+                >
+                  Make admin
+                </button>
+              )}
+              {!u.isAdmin && (
+                <button
+                  onClick={async () => {
+                    if (!confirm(`Delete user ${u.name} (${u.email})? This will also remove their orders, cart, wishlist, addresses and reviews.`)) return;
+                    try { await j(`/api/admin/users?id=${u.id}`, { method: "DELETE" }); reload(); }
+                    catch (e) { alert(e instanceof Error ? e.message : "Couldn't delete user."); }
+                  }}
+                  className="text-xs text-destructive hover:underline"
+                >
+                  Delete
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 
@@ -1603,13 +1662,13 @@ function HampersTab({ hampers, reload }: { hampers: any[]; reload: () => void })
 
   const list = hampers.filter((h) => !q || `${h.name} ${h.slug}`.toLowerCase().includes(q.toLowerCase()));
 
-  const blank = { slug: "", name: "", image: "https://ik.imagekit.io/kjm6lzdqi/dryfruitadda/products/gift_JYpveUrx4.jpg", description: "", highlights: [""], price: "", mrp: "", rating: "4.9", badge: "", inStock: true, items: [{ slug: "", name: "", qty: "1" }], metaTitle: "", metaDescription: "" };
+  const blank = { slug: "", name: "", images: ["https://ik.imagekit.io/kjm6lzdqi/dryfruitadda/products/gift_JYpveUrx4.jpg"], description: "", highlights: [""], price: "", mrp: "", rating: "4.9", badge: "", inStock: true, items: [{ slug: "", name: "", qty: "1" }], metaTitle: "", metaDescription: "" };
 
   const openNew = () => { setErr(null); setEditor({ isNew: true, slugTouched: false, form: { ...blank } }); };
   const openEdit = (h: any) => {
     setErr(null);
     setEditor({ isNew: false, slugTouched: true, form: {
-      slug: h.slug, name: h.name, image: h.image, description: h.description,
+      slug: h.slug, name: h.name, images: h.images?.length ? [...h.images] : [h.image], description: h.description,
       highlights: h.highlights?.length ? [...h.highlights] : [""],
       price: String(h.price), mrp: String(h.mrp), rating: String(h.rating ?? 4.9),
       badge: h.badge ?? "", inStock: h.inStock !== false,
@@ -1639,18 +1698,22 @@ function HampersTab({ hampers, reload }: { hampers: any[]; reload: () => void })
     if (items.length === 0) return setErr("Add at least one item to the hamper.");
     setBusy(true); setErr(null);
     try {
+      const imgs = (f.images ?? []).map((x: string) => x.trim()).filter((x: string) => /^https?:\/\//.test(x)).slice(0, 8);
+      const mainImg = imgs[0] || "https://ik.imagekit.io/kjm6lzdqi/dryfruitadda/products/gift_JYpveUrx4.jpg";
       await j("/api/admin/hampers", { method: editor.isNew ? "POST" : "PUT", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ slug: f.slug.trim(), name: f.name.trim(), image: f.image.trim() || "https://ik.imagekit.io/kjm6lzdqi/dryfruitadda/products/gift_JYpveUrx4.jpg", description: f.description.trim(),
+        body: JSON.stringify({ slug: f.slug.trim(), name: f.name.trim(), image: mainImg, images: imgs.length ? imgs : [mainImg], description: f.description.trim(),
           highlights: f.highlights.map((h: string) => h.trim()).filter(Boolean), price: Number(f.price), mrp: Number(f.mrp),
           rating: Number(f.rating) || 4.9, badge: f.badge || undefined, inStock: f.inStock, items,
           metaTitle: f.metaTitle.trim(), metaDescription: f.metaDescription.trim() }) });
       setEditor(null); reload();
+      toast.success("Hamper saved — live now");
+      bustCache("/api/hampers");
     } catch (e) { setErr(e instanceof Error ? e.message : "Couldn't save hamper."); }
     finally { setBusy(false); }
   };
 
-  const toggleStock = async (h: any) => { await j("/api/admin/hampers", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...h, inStock: !h.inStock }) }); reload(); };
-  const remove = async (slug: string) => { if (!confirm(`Delete hamper ${slug}?`)) return; await j(`/api/admin/hampers?slug=${slug}`, { method: "DELETE" }); reload(); };
+  const toggleStock = async (h: any) => { await j("/api/admin/hampers", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...h, inStock: !h.inStock }) }); reload(); bustCache("/api/hampers"); };
+  const remove = async (slug: string) => { if (!confirm(`Delete hamper ${slug}?`)) return; await j(`/api/admin/hampers?slug=${slug}`, { method: "DELETE" }); reload(); bustCache("/api/hampers"); };
 
   const F = "w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-gold";
   const L = "block text-xs font-semibold uppercase tracking-wider text-muted-foreground";
@@ -1671,7 +1734,29 @@ function HampersTab({ hampers, reload }: { hampers: any[]; reload: () => void })
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="text-sm font-medium"><span className={L}>Hamper name *</span><input value={editor.form.name} onChange={(e) => setName(e.target.value)} required placeholder="e.g. Festive Gold Hamper" className={`${F} mt-1.5`} /></label>
             <label className="text-sm font-medium"><span className={L}>Slug (URL) *</span><input value={editor.form.slug} onChange={(e) => setEditor((ed: any) => (ed ? { ...ed, slugTouched: true, form: { ...ed.form, slug: e.target.value } } : ed))} required placeholder="festive-gold-hamper" className={`${F} mt-1.5 font-mono`} /></label>
-            <label className="text-sm font-medium sm:col-span-2"><span className={L}>Image URL</span><span className="mt-1.5 flex items-center gap-3"><img src={editor.form.image || "https://ik.imagekit.io/kjm6lzdqi/dryfruitadda/products/gift_JYpveUrx4.jpg"} alt="" onError={(e) => ((e.target as HTMLImageElement).src = "https://ik.imagekit.io/kjm6lzdqi/dryfruitadda/products/gift_JYpveUrx4.jpg")} className="h-14 w-14 shrink-0 rounded-md border border-border object-cover" /><input value={editor.form.image} onChange={(e) => set({ image: e.target.value })} placeholder="https://ik.imagekit.io/kjm6lzdqi/dryfruitadda/products/gift_JYpveUrx4.jpg" className={`${F} font-mono`} /><ImageUploadButton onUploaded={(url) => set({ image: url })} category={editor.form.category} /></span></label>
+            <div className="sm:col-span-2">
+              <p className={L}>Images * (first = main image)</p>
+              <div className="mt-1.5 space-y-2">
+                {editor.form.images.map((src: string, i: number) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <img src={src || "https://ik.imagekit.io/kjm6lzdqi/dryfruitadda/products/gift_JYpveUrx4.jpg"} alt="" onError={(e) => ((e.target as HTMLImageElement).src = "https://ik.imagekit.io/kjm6lzdqi/dryfruitadda/products/gift_JYpveUrx4.jpg")} className="h-12 w-12 shrink-0 rounded-md border border-border object-cover" />
+                    <input value={src} onChange={(e) => set({ images: editor.form.images.map((x: string, j: number) => (j === i ? e.target.value : x)) })} placeholder="https://ik.imagekit.io/kjm6lzdqi/dryfruitadda/products/gift_JYpveUrx4.jpg" aria-label={`Image ${i + 1} URL`} className={`${F} font-mono`} />
+                    <ImageUploadButton onUploaded={(url) => set({ images: editor.form.images.map((x: string, j: number) => (j === i ? url : x)) })} category="gift-hampers" label="File" />
+                    <span className="flex shrink-0 gap-1">
+                      <button type="button" onClick={() => { const imgs = [...editor.form.images]; const t = imgs[i - 1]; imgs[i - 1] = imgs[i]; imgs[i] = t; set({ images: imgs }); }} disabled={i === 0} aria-label="Move up" className="rounded-md border border-input px-2 py-2 text-xs disabled:opacity-30">↑</button>
+                      <button type="button" onClick={() => { const imgs = [...editor.form.images]; const t = imgs[i + 1]; imgs[i + 1] = imgs[i]; imgs[i] = t; set({ images: imgs }); }} disabled={i === editor.form.images.length - 1} aria-label="Move down" className="rounded-md border border-input px-2 py-2 text-xs disabled:opacity-30">↓</button>
+                      <button type="button" onClick={() => set({ images: editor.form.images.filter((_: string, j: number) => j !== i) })} disabled={editor.form.images.length <= 1} aria-label="Remove image" className="rounded-md border border-destructive/40 px-2 py-2 text-xs text-destructive disabled:opacity-30">✕</button>
+                    </span>
+                  </div>
+                ))}
+                <button type="button" disabled={editor.form.images.length >= 8} onClick={() => set({ images: [...editor.form.images, ""] })} className="text-sm font-medium text-primary hover:underline disabled:opacity-40 disabled:no-underline">+ Add another image {editor.form.images.length >= 8 ? "(max 8)" : ""}</button>
+              </div>
+              <div className="mt-1.5 flex flex-wrap gap-1">
+                {["almonds_UOTtyTDyL.jpg", "cashews.jpg", "pistachios.jpg", "walnuts.jpg", "dates.jpg", "figs.jpg", "raisins.jpg", "mixed.jpg", "seeds.jpg", "gift.jpg"].map((f) => (
+                  <button key={f} type="button" title={`Use ${f}`} onClick={() => { const url = `https://ik.imagekit.io/kjm6lzdqi/dryfruitadda/products/${f}`; const imgs = [...editor.form.images]; const empty = imgs.findIndex((x: string) => !x.trim()); if (empty >= 0) imgs[empty] = url; else imgs.push(url); set({ images: imgs }); }} className="rounded border border-border bg-secondary/40 px-2 py-0.5 font-mono text-[11px] hover:border-gold hover:text-gold">{f}</button>
+                ))}
+              </div>
+            </div>
             <label className="text-sm font-medium"><span className={L}>Price (₹) *</span><input value={editor.form.price} onChange={(e) => set({ price: e.target.value })} inputMode="numeric" required placeholder="1499" className={`${F} mt-1.5`} /></label>
             <label className="text-sm font-medium"><span className={L}>MRP (₹) *</span><input value={editor.form.mrp} onChange={(e) => set({ mrp: e.target.value })} inputMode="numeric" required placeholder="1799" className={`${F} mt-1.5`} /></label>
             <label className="text-sm font-medium"><span className={L}>Rating (0–5)</span><input value={editor.form.rating} onChange={(e) => set({ rating: e.target.value })} type="number" min={0} max={5} step={0.1} className={`${F} mt-1.5`} /></label>
@@ -1727,7 +1812,7 @@ function HampersTab({ hampers, reload }: { hampers: any[]; reload: () => void })
       <ul className="space-y-2">
         {list.map((h) => (
           <li key={h.slug} className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card p-3 text-sm">
-            <img src={h.image} alt="" loading="lazy" onError={(e) => ((e.target as HTMLImageElement).src = "https://ik.imagekit.io/kjm6lzdqi/dryfruitadda/products/gift_JYpveUrx4.jpg")} className="h-10 w-10 rounded-md border border-border object-cover" />
+            <img src={h.images?.[0] || h.image} alt="" loading="lazy" onError={(e) => ((e.target as HTMLImageElement).src = "https://ik.imagekit.io/kjm6lzdqi/dryfruitadda/products/gift_JYpveUrx4.jpg")} className="h-10 w-10 rounded-md border border-border object-cover" />
             <span className="min-w-0 flex-1"><b>{h.name}</b><span className="block truncate text-xs text-muted-foreground">{h.slug} · ₹{h.price} (MRP ₹{h.mrp}) · {h.items?.length ?? 0} items</span></span>
             <button onClick={() => toggleStock(h)} className={cn("rounded-full px-3 py-1 text-xs font-medium", h.inStock ? "bg-primary/10 text-primary" : "bg-destructive/10 text-destructive")}>{h.inStock ? "In stock" : "Out of stock"}</button>
             <button onClick={() => openEdit(h)} className="rounded-md border border-input px-3 py-1 text-xs hover:border-gold">Edit</button>
@@ -1873,7 +1958,7 @@ function PincodesTab({ reload }: { reload: () => void }) {
   const [hiddenCount, setHiddenCount] = useState(0);
   const [defaults, setDefaults] = useState<Record<string, number>>({});
   const [zoneLabels, setZoneLabels] = useState<Record<string, string>>({});
-  const [freeAbove, setFreeAbove] = useState(999);
+  const [_freeAbove, setFreeAbove] = useState(999);
   const [q, setQ] = useState("");
   const [zoneF, setZoneF] = useState("");
   const [showHidden, setShowHidden] = useState(false);
@@ -2020,9 +2105,7 @@ function PincodesTab({ reload }: { reload: () => void }) {
             </div>
           ))}
         </div>
-        <p className="mt-2 text-xs text-muted-foreground">
-          Har pincode ka charge zone se auto aata hai. Neeche kisi pincode par charge change karoge to wo custom override ban jayega. Free shipping ₹{freeAbove}+ par.
-        </p>
+        
       </div>
 
       {/* Add / override form */}
