@@ -227,8 +227,8 @@ export default function BroadcastsTab() {
     <div className="space-y-5">
       {!configured && (
         <p className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          <b>RESEND_API_KEY not set</b> — broadcasts run in dry-run mode. Nothing is actually
-          emailed, only logged. Add the key to .env to send real email.
+          <b>SMTP_HOST not set</b> — emails run in dry-run mode. Nothing is actually
+          emailed, only logged. Add your SMTP settings to .env to send real email.
         </p>
       )}
 
@@ -309,7 +309,7 @@ export default function BroadcastsTab() {
               <option value="users">All users</option>
               <option value="subscribers">Newsletter subscribers</option>
               <option value="both">Users + subscribers</option>
-              <option value="test">Test — only my inbox (RESEND_TEST_TO)</option>
+              <option value="test">Test — only my inbox (SMTP_TEST_TO)</option>
             </select>
           </label>
           <label className="text-sm font-medium">

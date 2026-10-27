@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { CheckCircle2, ChevronDown, ChevronRight, Heart, KeyRound, LogOut, Mail, MapPin, Package, Pencil, Plus, ShoppingBag, Trash2, TriangleAlert, Truck, User as UserIcon, X } from "lucide-react";
+import { CheckCircle2, ChevronDown, ChevronRight, Heart, KeyRound, Loader2, LogOut, Mail, MapPin, Package, Pencil, Plus, ShoppingBag, Trash2, TriangleAlert, Truck, User as UserIcon, X } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useStore } from "@/lib/store";
 import { inr } from "@/lib/products";
@@ -61,7 +61,7 @@ const labelStatus = (s: string) =>
     : s.charAt(0).toUpperCase() + s.slice(1);
 
 export default function AccountContent() {
-  const { user, logout, refresh } = useAuth();
+  const { user, loading, logout, refresh } = useAuth();
   const { count, wishlist } = useStore();
   const router = useRouter();
 
@@ -129,6 +129,14 @@ export default function AccountContent() {
     () => (orderFilter === "all" ? orders : orders.filter((o) => o.status === orderFilter)),
     [orders, orderFilter],
   );
+
+  if (loading)
+    return (
+      <div className="mx-auto max-w-md px-4 py-20 text-center">
+        <Loader2 className="mx-auto h-10 w-10 animate-spin text-gold" />
+        <p className="mt-4 text-sm text-muted-foreground">Loading your account…</p>
+      </div>
+    );
 
   if (!user) {
     return (

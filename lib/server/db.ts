@@ -756,9 +756,15 @@ async function loadAll(): Promise<{ db: DbShape; version: number }> {
   return { db: normalize(db), version: meta.__v ?? 0 };
 }
 
-// Sab collections parallel me likhta hai. Pehle sab kuch ek document tha,
-// ab 12 collections — Promise.all se ek round-trip me ho jata hai.
-async function persistAll(db: DbShape, expectedVersion: number): Promise<void> {
+// Collections parallel me likhti hain. `changedCols` undefined = sab likho
+// (fresh seed). Defined = sirf woh collections jinmein actually badlaav aaya —
+// har chhote write (cart add, login, order) pe poora DB dobara likhna bahut
+// mehnga padta tha (Atlas par 2-3s per write).
+async function persistAll(
+  db: DbShape,
+  expectedVersion: number,
+  changedCols?: string[],
+): Promise<void> {
   const { metaCol, ARRAY_COLLECTIONS, META_ID, mongo } = await import("./mongo");
   const next = expectedVersion + 1;
 
@@ -772,19 +778,21 @@ async function persistAll(db: DbShape, expectedVersion: number): Promise<void> {
     wishlists: db.wishlists ?? {},
   };
 
-  // meta pehle likho (version bump), phir data. Agar beech me crash ho to
-  // version aage badla hua hai aur agla read usse dekh lega.
+  // meta hamesha likho (version bump + carts/wishlists/settings yahin hain).
   await (await metaCol()).replaceOne({ _id: META_ID }, metaDoc, { upsert: true });
 
-  const d = await mongo();
-  await Promise.all(
-    ARRAY_COLLECTIONS.map(async (n) => {
-      const rows = (db[n as keyof DbShape] as unknown[] | undefined) ?? [];
-      const col = d.collection(n);
-      await col.deleteMany({});
-      if (rows.length) await col.insertMany(rows as never[]);
-    }),
-  );
+  const cols = changedCols ?? ARRAY_COLLECTIONS;
+  if (cols.length) {
+    const d = await mongo();
+    await Promise.all(
+      cols.map(async (n) => {
+        const rows = (db[n as keyof DbShape] as unknown[] | undefined) ?? [];
+        const col = d.collection(n);
+        await col.deleteMany({});
+        if (rows.length) await col.insertMany(rows as never[]);
+      }),
+    );
+  }
 
   cache = { version: next, db };
 }
@@ -807,7 +815,10 @@ export async function readDb(): Promise<DbShape> {
 
 export async function writeDb(db: DbShape): Promise<void> {
   const { metaCol, META_ID } = await import("./mongo");
-  const cur = await (await metaCol()).findOne({ _id: META_ID });
+  const cur = await (await metaCol()).findOne(
+    { _id: META_ID },
+    { projection: { __v: 1 } },
+  );
   await persistAll(db, cur?.__v ?? 0);
 }
 
@@ -823,9 +834,41 @@ export async function updateDb<T>(fn: (db: DbShape) => T | Promise<T>): Promise<
   g.__dfa_db_lock__ = prev.then(() => next);
   await prev;
   try {
-    const { db, version } = await loadAll();
+    const { metaCol, ARRAY_COLLECTIONS, META_ID } = await import("./mongo");
+    // Sasta version check — poora DB load karne ki zaroorat nahi.
+    const cur = await (await metaCol()).findOne(
+      { _id: META_ID },
+      { projection: { __v: 1 } },
+    );
+    const metaV = cur?.__v ?? 0;
+    if (!cache || cache.version !== metaV) {
+      invalidateDbCache();
+      await readDb(); // loadAll cache set karta hai
+    }
+    const db = cache!.db;
+    const version = cache!.version;
+
+    // fn se pehle per-collection snapshot — sirf jo badla wohi likhenge.
+    const preCols = ARRAY_COLLECTIONS.map((n) =>
+      JSON.stringify((db as Record<string, unknown>)[n] ?? []),
+    );
+    const metaSnap = () =>
+      JSON.stringify([
+        db.settings,
+        db.hiddenPincodes ?? [],
+        db.carts ?? {},
+        db.wishlists ?? {},
+      ]);
+    const preMeta = metaSnap();
+
     const out = await fn(db);
-    await persistAll(db, version);
+
+    const changedCols = ARRAY_COLLECTIONS.filter(
+      (n, i) => JSON.stringify((db as Record<string, unknown>)[n] ?? []) !== preCols[i],
+    );
+    if (changedCols.length || metaSnap() !== preMeta) {
+      await persistAll(db, version, changedCols);
+    }
     return out;
   } finally {
     release();

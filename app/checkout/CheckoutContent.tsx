@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { Banknote, CheckCircle2, Lock, MapPin, QrCode, ShoppingBag, Truck } from "lucide-react";
+import { Banknote, CheckCircle2, Loader2, Lock, MapPin, QrCode, ShoppingBag, Truck } from "lucide-react";
 import { inr } from "@/lib/products";
 import { useCatalog } from "@/lib/catalog";
 import { useStore } from "@/lib/store";
@@ -91,7 +91,7 @@ function Steps({ step }: { step: number }) {
 export default function CheckoutContent() {
   const { get: getProduct } = useCatalog();
   const { cart, clear, subtotal, discount, shipping, total, coupon } = useStore();
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const [pay, setPay] = useState("cod");
 
   const [pinInfo, setPinInfo] = useState<{
@@ -300,6 +300,14 @@ export default function CheckoutContent() {
         >
           Start Shopping
         </Link>
+      </div>
+    );
+
+  if (loading)
+    return (
+      <div className="mx-auto max-w-md px-4 py-16 text-center sm:py-24">
+        <Loader2 className="mx-auto h-10 w-10 animate-spin text-gold" />
+        <p className="mt-4 text-sm text-muted-foreground">Checking your session…</p>
       </div>
     );
 

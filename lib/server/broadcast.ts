@@ -13,8 +13,8 @@ export async function deliverBroadcast(
   let recipients: string[] = [];
   if (bc.audience === "test") {
     // Preview mode — sirf apne aap ko bhejo (quota bacha rehta hai, domain
-    // verify se pehle bhi test chal jaata hai jab RESEND_TEST_TO gmail ho).
-    const to = process.env.RESEND_TEST_TO?.trim() || process.env.ADMIN_EMAIL?.trim() || "";
+    // SMTP_TEST_TO se test inbox set kar sakte hain; admin email fallback hai.
+    const to = process.env.SMTP_TEST_TO?.trim() || process.env.ADMIN_EMAIL?.trim() || "";
     recipients = to ? [to] : [];
   }
   if (bc.audience === "users" || bc.audience === "both") {

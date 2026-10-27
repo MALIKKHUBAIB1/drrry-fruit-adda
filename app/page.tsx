@@ -43,11 +43,12 @@ export default async function Home() {
   return (
     <>
       {/* Hero */}
-      <section className="relative overflow-hidden bg-cocoa">
+      <section className="relative isolate overflow-hidden bg-[radial-gradient(ellipse_at_78%_18%,_rgba(214,168,68,0.20),_transparent_34%),radial-gradient(ellipse_at_8%_92%,_rgba(120,57,34,0.42),_transparent_42%),linear-gradient(125deg,#160d0a_0%,#2b1711_48%,#100b09_100%)]">
+        <div aria-hidden="true" className="pointer-events-none absolute -right-28 top-1/2 h-[32rem] w-[32rem] -translate-y-1/2 rounded-full bg-gold/10 blur-[110px]" />
         {hero.enabled && (
           <>
             <img src={hero.image} alt="" width={1920} height={1088} className="absolute inset-0 h-full w-full object-cover object-right" />
-            <div className="absolute inset-0 bg-gradient-to-r from-cocoa via-cocoa/80 to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-r from-[#160d0a]/95 via-[#21120d]/80 to-[#160d0a]/25" />
             <div className="relative mx-auto flex min-h-[78vh] max-w-7xl items-center px-4 py-20">
               <div className="max-w-xl">
                 {hero.eyebrow && (
@@ -116,7 +117,7 @@ export default async function Home() {
         </div>
       </section>
 
-      <section className="bg-cocoa">
+      <section className="bg-[radial-gradient(ellipse_at_75%_50%,_rgba(214,168,68,0.15),_transparent_40%),linear-gradient(120deg,#160d0a_0%,#321b13_55%,#1b100c_100%)]">
         <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 py-16 md:grid-cols-2">
           <img src="https://ik.imagekit.io/kjm6lzdqi/dryfruitadda/products/gift_JYpveUrx4.jpg" alt="Dryfruit Adda signature gift box" loading="lazy" width={1024} height={1024} className="w-full rounded-lg border border-gold/40 object-cover shadow-2xl" />
           <div>

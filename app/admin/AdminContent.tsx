@@ -115,7 +115,7 @@ export default function AdminContent() {
           {tab === "Categories" && "Shop-by-category tiles on the home page."}
           {tab === "Gift Hampers" && "Curated gift hampers with multiple items."}
           {tab === "Promo Banner" && "Hero banner + offer banner with live countdown, both on the home page."}
-        {tab === "Broadcasts" && "Email offers and announcements to users and newsletter subscribers (Resend)."}
+        {tab === "Broadcasts" && "Email offers and announcements to users and newsletter subscribers (SMTP)."}
           {tab === "Pincodes" && "Pincode-wise delivery charges across India."}
           {tab === "Coupons" && "Create and manage discount codes."}
           {tab === "Users" && "Customers and admin access."}
