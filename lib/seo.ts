@@ -5,7 +5,7 @@ export const SITE_DESCRIPTION =
   "Shop handpicked premium almonds, cashews, pistachios, walnuts, dates, figs and luxury dry fruit gift hampers. Delivered across India.";
 
 export const siteUrl =
-  process.env.NEXT_PUBLIC_SITE_URL?.trim().replace(/\/+$/, "") || "https://dryfruitadda.in";
+  process.env.NEXT_PUBLIC_SITE_URL?.trim().replace(/\/+$/, "") || "https://www.dryfruitaddaa.in";
 
 export const absUrl = (path: string) =>
   path.startsWith("http") ? path : `${siteUrl}${path.startsWith("/") ? path : `/${path}`}`;
