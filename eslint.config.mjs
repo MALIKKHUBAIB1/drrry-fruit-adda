@@ -20,6 +20,7 @@ export default [
   {
     ignores: [
       "node_modules/**",
+      "studio/**",
       ".next/**",
       "coverage/**",
       "dist/**",

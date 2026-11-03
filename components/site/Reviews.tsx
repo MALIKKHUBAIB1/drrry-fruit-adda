@@ -254,7 +254,7 @@ export function ReviewsSection({
             )}
           </div>
           <p className="text-xs text-muted-foreground">
-            Reviewing as <b>{user.name}</b> — one review per product; submitting again will update
+            Reviewing as <b>{user?.name || "Guest"}</b> — one review per product; submitting again will update
             it.
           </p>
         </form>

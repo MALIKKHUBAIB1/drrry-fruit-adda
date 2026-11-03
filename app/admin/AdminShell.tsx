@@ -44,7 +44,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const searchParams = useSearchParams();
   const [open, setOpen] = useState(false);
   const active = searchParams.get("tab") ?? "Overview";
-  const initial = user?.name.trim().charAt(0).toUpperCase() || "A";
+  const initial = (user?.name ?? "A").trim().charAt(0).toUpperCase() || "A";
 
   const isLogin = pathname === "/admin/login" || pathname.startsWith("/admin/login/");
 

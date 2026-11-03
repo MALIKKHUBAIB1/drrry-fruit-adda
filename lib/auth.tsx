@@ -54,7 +54,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         body: JSON.stringify({ email, password }),
       });
       setUser(data.user);
-      toast.success(`Welcome back, ${data.user.name.split(" ")[0]}!`);
+      const firstName = (data.user.name ?? "there").trim().split(/\s+/)[0] || "there";
+      toast.success(`Welcome back, ${firstName}!`);
       // Login par guest cart/wishlist backend me merge ho jayega (store sunta hai)
       window.dispatchEvent(new Event("dfa-auth"));
       return null;
@@ -90,7 +91,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         body: JSON.stringify(input),
       });
       setUser(data.user);
-      toast.success(`Welcome, ${data.user.name.split(" ")[0]}!`);
+      const firstName = (data.user.name ?? "there").trim().split(/\s+/)[0] || "there";
+      toast.success(`Welcome, ${firstName}!`);
       window.dispatchEvent(new Event("dfa-auth"));
       return null;
     } catch (e) {

@@ -117,19 +117,19 @@ export function Header({ announcements }: { announcements?: string[] }) {
             <Link
               href={user ? "/account" : signInHref}
               aria-label={user ? "My account" : "Sign in"}
-              title={user ? user.name : "Sign in / Register"}
+              title={user?.name || "Sign in / Register"}
               className="hidden items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-muted sm:flex"
             >
               {user ? (
                 <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-primary text-[11px] font-bold text-primary-foreground">
-                  {user.name.trim().charAt(0).toUpperCase()}
+                  {(user.name ?? "U").trim().charAt(0).toUpperCase() || "U"}
                 </span>
               ) : (
                 <User className="h-5 w-5 shrink-0" />
               )}
               <span className="hidden text-left leading-tight lg:block">
                 <span className="block text-[11px] text-muted-foreground">
-                  {user ? `Hello, ${user.name.trim().split(" ")[0]}` : "Hello, Sign in"}
+                  {user ? `Hello, ${(user.name ?? "User").trim().split(/\s+/)[0] || "there"}` : "Hello, Sign in"}
                 </span>
                 <span className="block text-[12px] font-semibold text-foreground">Account &amp; Orders</span>
               </span>
@@ -201,7 +201,7 @@ export function Header({ announcements }: { announcements?: string[] }) {
                   className="flex items-center gap-2.5 font-display text-xl text-primary hover:underline"
                 >
                   <User className="h-5 w-5" />
-                  {user ? `Hi, ${user.name.trim().split(" ")[0]}` : "Sign in / Register"}
+                  {user ? `Hi, ${(user.name ?? "User").trim().split(/\s+/)[0] || "there"}` : "Sign in / Register"}
                 </Link>
               </li>
               {nav.map((n) => (

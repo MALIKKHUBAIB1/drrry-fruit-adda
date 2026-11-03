@@ -163,7 +163,7 @@ export default function AccountContent() {
     );
   }
 
-  const initial = user.name.trim().charAt(0).toUpperCase() || "D";
+  const initial = (user.name ?? "D").trim().charAt(0).toUpperCase() || "D";
 
   const saveName = async () => {
     setNameErr(null);
