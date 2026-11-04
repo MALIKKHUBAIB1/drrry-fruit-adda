@@ -89,14 +89,22 @@ function Steps({ step }: { step: number }) {
 }
 
 export default function CheckoutContent() {
-  const { get: getProduct, refreshCatalog } = useCatalog();
-  const { cart, clear, subtotal, discount, shipping, coupon } = useStore();
+  const { get: getProduct, refreshCatalog, ready } = useCatalog();
+  const { cart, clear, remove, subtotal, discount, shipping, coupon } = useStore();
   const { user, loading } = useAuth();
   const [pay, setPay] = useState("cod");
 
   useEffect(() => {
     void refreshCatalog();
   }, [refreshCatalog]);
+
+  useEffect(() => {
+    if (!ready) return;
+    for (const x of cart) {
+      const p = getProduct(x.slug);
+      if (!p || !p.variants.some((v) => v.label === x.variant)) remove(x.slug, x.variant);
+    }
+  }, [ready, cart, getProduct, remove]);
 
   const [pinInfo, setPinInfo] = useState<{
     city: string; state: string; district: string; zone: string;
@@ -369,6 +377,24 @@ export default function CheckoutContent() {
           noValidate
           onSubmit={async (e) => {
             e.preventDefault();
+            const invalidItems = ready
+              ? cart.filter((x) => {
+                  const p = getProduct(x.slug);
+                  return !p || !p.variants.some((v) => v.label === x.variant);
+                })
+              : [];
+            if (invalidItems.length > 0) {
+              for (const x of invalidItems) remove(x.slug, x.variant);
+              if (invalidItems.length === cart.length) {
+                setPlaceError(
+                  "Cart ke kuch items ab available nahi the aur hataye gaye — naye items add karke dobara try karo.",
+                );
+                return;
+              }
+            }
+            const orderCart = invalidItems.length
+              ? cart.filter((x) => !invalidItems.includes(x))
+              : cart;
             const errs = validate(form);
             setErrors(errs);
             if (Object.keys(errs).length > 0) {
@@ -390,7 +416,7 @@ export default function CheckoutContent() {
                 headers: { "Content-Type": "application/json" },
                 credentials: "include",
                 body: JSON.stringify({
-                  items: cart.map((x) => ({ slug: x.slug, variant: x.variant, qty: x.qty })),
+                  items: orderCart.map((x) => ({ slug: x.slug, variant: x.variant, qty: x.qty })),
                   coupon,
                   name: form.name,
                   phone: form.phone,
