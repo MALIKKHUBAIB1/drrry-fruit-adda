@@ -733,28 +733,61 @@ function normalize(db: Partial<DbShape>): DbShape {
 // cycle ke beech doosre writer ne likh diya to save() throw karega. Pehle ye
 // process-local mutex se hota tha, jo multi-instance deploys me kaam nahi karta.
 
-let cache: { version: number; db: DbShape } | null = null;
+let cache: { version: number; db: DbShape; at: number } | null = null;
 let cacheInFlight: Promise<DbShape> | null = null;
+
+// Read cache TTL. Bina iske ek warm instance (Vercel serverless) apna pehla
+// snapshot HAMESHA dikhata tha — uske baad doosri instance par bane naye
+// order/user us instance ko kabhi nahi dikhte the ("order admin panel me nahi
+// aa rahe"). TTL ke baad ek baar reload hota hai;3s ke andar sab reads cache.
+const READ_CACHE_TTL_MS = 3_000;
 
 export function invalidateDbCache() {
   cache = null;
 }
 
-async function loadAll(): Promise<{ db: DbShape; version: number }> {
+async function loadAll(attempt = 0): Promise<{ db: DbShape; version: number }> {
   const { metaCol, ARRAY_COLLECTIONS, META_ID } = await import("./mongo");
   const mc = await metaCol();
 
-  const [meta, ...cols] = await Promise.all([
-    mc.findOne({ _id: META_ID }),
-    ...ARRAY_COLLECTIONS.map((n) =>
+  // Meta PEHLE, collections BAAD me. Parallel (Promise.all) read me torn read
+  // possible tha: meta naya + collections purane → cache.version naya par db
+  // stale → agla updateDb version match samajh ke stale snapshot persist kar
+  // deta (lost update). Meta pehle padhne se collections hamesha meta se
+  // kam-se-kam itne hi naye hote hain (ya naye — wo safe hai).
+  const meta = await mc.findOne({ _id: META_ID });
+  const cols = await Promise.all(
+    ARRAY_COLLECTIONS.map((n) =>
       mongo().then((d) => d.collection(n).find({}).toArray()),
     ),
-  ]);
+  );
 
   if (!meta) {
     // Fresh install — seed once. Existing data ko kabhi overwrite nahi.
+    const hasData = cols.some((c) => Array.isArray(c) && c.length > 0);
+    if (hasData) {
+      // Meta doc missing par data maujood = corruption, fresh install NAHI.
+      // Sirf meta recreate karo (changedCols=[] → collections bilkul nahi
+      // chhue jaate), warna seed ke chhote snapshot se sab delete ho jaata.
+      console.error(
+        JSON.stringify({
+          level: "error",
+          msg: "meta document missing while collections hold data — recreating meta only, not re-seeding",
+        }),
+      );
+      const rebuilt = {
+        ...seed(),
+        ...Object.fromEntries(ARRAY_COLLECTIONS.map((n, i) => [n, cols[i]])),
+      } as unknown as DbShape;
+      const ok = await persistAll(rebuilt, 0, []);
+      if (!ok) return attempt < 2 ? loadAll(attempt + 1) : { db: normalize(rebuilt), version: 1 };
+      return { db: normalize(rebuilt), version: 1 };
+    }
     const fresh = seed();
-    await persistAll(fresh, 0);
+    const ok = await persistAll(fresh, 0);
+    // Conflict = doosre instance ne seed kar diya (meta ab exist karta hai) —
+    // uska data use karo, apna dobara mat likho.
+    if (!ok) return attempt < 2 ? loadAll(attempt + 1) : { db: fresh, version: 1 };
     return { db: fresh, version: 1 };
   }
 
@@ -768,19 +801,89 @@ async function loadAll(): Promise<{ db: DbShape; version: number }> {
     wishlists: (meta.wishlists ?? {}) as DbShape["wishlists"],
   } as unknown as DbShape;
 
-  return { db: normalize(db), version: meta.__v ?? 0 };
+  const normalized = normalize(db);
+  // Sanity tripwire: users khaali ho lekin orders/sessions maujood hon —
+  // aisa tabhi ho sakta hai jab kisi ne collection galat tareeke se wipe ki ho.
+  // Aage badhne se pehle loud ho jaata hai (log/alert), chup-chaap pass nahi.
+  if (!normalized.users.length && (normalized.orders.length || normalized.sessions.length)) {
+    console.error(
+      JSON.stringify({
+        level: "error",
+        msg: "users collection empty while orders/sessions exist — possible data loss",
+        orders: normalized.orders.length,
+        sessions: normalized.sessions.length,
+      }),
+    );
+  }
+  return { db: normalized, version: meta.__v ?? 0 };
+}
+
+function isDuplicateKeyError(err: unknown): boolean {
+  const code = (err as { code?: number } | null)?.code;
+  return code === 11000 || code === 11001;
+}
+
+// Collection ko uske natural key se sync karta hai: pehle saare rows upsert,
+// phir jo rows ab list me nahi hain unhe prune. deleteMany+insertMany ki jagah
+// isliye kyunki usme collection ek pal ke liye KHAALI hoti thi — agar us
+// window me koi reader (doosri instance, ya test process) padhe to uske paas
+// 0 records aate the aur uska agla poora write production ka data bhi khaali
+// kar deta tha. Upsert-prune model me empty window hai hi nahi, aur beech me
+// failure par data merge rehta hai (wipe nahi).
+async function syncCollection(name: string, rows: unknown[]): Promise<void> {
+  const { mongo, COLLECTION_KEYS } = await import("./mongo");
+  const key = COLLECTION_KEYS[name as keyof typeof COLLECTION_KEYS];
+  if (!key) throw new Error(`No unique key configured for collection "${name}"`);
+
+  const docs = rows as Record<string, unknown>[];
+  for (const doc of docs) {
+    if (doc[key] === undefined || doc[key] === null || doc[key] === "") {
+      throw new Error(`Row in "${name}" is missing unique key "${key}" — refusing to write.`);
+    }
+  }
+
+  const col = (await mongo()).collection(name);
+  if (docs.length) {
+    await col.bulkWrite(
+      docs.map((doc) => {
+        const replacement = { ...doc };
+        // _id kabhi badlo mat — replaceOne pehle se maujood _id ko preserve
+        // karta hai, aur type conflict (ObjectId vs string) se bachta hai.
+        delete replacement._id;
+        return {
+          replaceOne: {
+            filter: { [key]: doc[key] },
+            replacement,
+            upsert: true,
+          },
+        };
+      }),
+      { ordered: true },
+    );
+  }
+  await col.deleteMany({ [key]: { $nin: docs.map((doc) => doc[key]) } });
 }
 
 // Collections parallel me likhti hain. `changedCols` undefined = sab likho
-// (fresh seed). Defined = sirf woh collections jinmein actually badlaav aaya —
-// har chhote write (cart add, login, order) pe poora DB dobara likhna bahut
-// mehnga padta tha (Atlas par 2-3s per write).
+// (fresh seed / writeDb). Defined = sirf woh collections jinmein actually
+// badlaav aaya — har chhote write (cart add, login, order) pe poora DB
+// dobara likhna bahut mehnga padta tha (Atlas par 2-3s per write).
+//
+// Do safety guarantees:
+//  1. Meta ka version CONDITIONAL likha jaata hai (CAS). Agar kisi doosre
+//     server instance ne version already badha diya to hum apna stale
+//     snapshot likhne se pehle hi reject ho jaate hain — warna uske naye
+//     user/session silently revert ho jaate (lost update).
+//  2. Collections keyed upsert + prune se sync hoti hain (koi empty window
+//     nahi) — upar wale comment me detail.
+//
+// false = version conflict; caller cache invalidate karke dobara try karega.
 async function persistAll(
   db: DbShape,
   expectedVersion: number,
   changedCols?: string[],
-): Promise<void> {
-  const { metaCol, ARRAY_COLLECTIONS, META_ID, mongo } = await import("./mongo");
+): Promise<boolean> {
+  const { metaCol, ARRAY_COLLECTIONS, META_ID, COLLECTION_KEYS } = await import("./mongo");
   const next = expectedVersion + 1;
 
   const metaDoc = {
@@ -793,31 +896,47 @@ async function persistAll(
     wishlists: db.wishlists ?? {},
   };
 
-  // meta hamesha likho (version bump + carts/wishlists/settings yahin hain).
-  await (await metaCol()).replaceOne({ _id: META_ID }, metaDoc, { upsert: true });
+  // Meta pehle, lekin conditional. __v match nahi hua = doosre writer ne jeet
+  // liya → apna (stale) snapshot likhna band. Insert ka matlab meta pehle se
+  // nahi tha (fresh seed / recover) — wo success hai.
+  const mc = await metaCol();
+  const filter = (expectedVersion > 0
+    ? { _id: META_ID, __v: expectedVersion }
+    : { _id: META_ID, __v: { $lte: 0 } }) as Parameters<typeof mc.replaceOne>[0];
+  try {
+    const res = await mc.replaceOne(filter, metaDoc, {
+      upsert: expectedVersion === 0,
+    });
+    if (res.matchedCount === 0 && !res.upsertedId) return false;
+  } catch (err) {
+    // Upsert ne insert karne ki koshish ki par _id pehle se tha = meta ban chuka
+    // hai (doosre instance ne seed/persist kar diya) → conflict.
+    if (isDuplicateKeyError(err)) return false;
+    throw err;
+  }
 
   const cols = changedCols ?? ARRAY_COLLECTIONS;
   if (cols.length) {
-    const d = await mongo();
+    if (cols.some((n) => !COLLECTION_KEYS[n as keyof typeof COLLECTION_KEYS])) {
+      throw new Error(`Missing unique key for changed collection(s): ${cols.join(", ")}`);
+    }
     await Promise.all(
-      cols.map(async (n) => {
-        const rows = (db[n as keyof DbShape] as unknown[] | undefined) ?? [];
-        const col = d.collection(n);
-        await col.deleteMany({});
-        if (rows.length) await col.insertMany(rows as never[]);
-      }),
+      cols.map((n) =>
+        syncCollection(n, (db[n as keyof DbShape] as unknown[] | undefined) ?? []),
+      ),
     );
   }
 
-  cache = { version: next, db };
+  cache = { version: next, db, at: Date.now() };
+  return true;
 }
 
 export async function readDb(): Promise<DbShape> {
-  if (cache) return cache.db;
+  if (cache && Date.now() - cache.at < READ_CACHE_TTL_MS) return cache.db;
   if (cacheInFlight) return cacheInFlight;
 
   const promise = loadAll().then(({ db, version }) => {
-    cache = { version, db };
+    cache = { version, db, at: Date.now() };
     return db;
   });
   cacheInFlight = promise;
@@ -828,18 +947,40 @@ export async function readDb(): Promise<DbShape> {
   }
 }
 
+// Full-DB snapshot write. App isko NAHI use karta (app hamesha updateDb) —
+// sirf tests route-suite restore karte hain. Production DB par poora snapshot
+// overwrite = one mistake away from data loss, isliye explicit isolation
+// (MONGODB_DB) ya override (DFA_ALLOW_DB_WRITE=1) ke bina yeh reject hota hai.
 export async function writeDb(db: DbShape): Promise<void> {
-  const { metaCol, META_ID } = await import("./mongo");
-  const cur = await (await metaCol()).findOne(
-    { _id: META_ID },
-    { projection: { __v: 1 } },
-  );
-  await persistAll(db, cur?.__v ?? 0);
+  const isolated = !!process.env.MONGODB_DB?.trim();
+  if (!isolated && process.env.DFA_ALLOW_DB_WRITE !== "1") {
+    throw new Error(
+      "writeDb() blocked: refusing a full-DB write against the production database. " +
+        "Set MONGODB_DB=<test-db> (isolated database) or DFA_ALLOW_DB_WRITE=1 to override.",
+    );
+  }
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const { metaCol, META_ID } = await import("./mongo");
+    const cur = await (await metaCol()).findOne(
+      { _id: META_ID },
+      { projection: { __v: 1 } },
+    );
+    if (await persistAll(db, cur?.__v ?? 0)) return;
+    // Version conflict — doosre writer ne meta badha diya. Fresh __v ke saath
+    // dobara (test restore intentionally force karta hai).
+    invalidateDbCache();
+  }
+  throw new Error("writeDb: meta version conflict after 5 attempts");
 }
 
 // Read-modify-write ko serialize karta hai. Pehle parallel updateDb calls
 // ek doosre ke writes ko overwrite kar dete the (lost updates) — order/coupon
 // use silently lost ho sakte the (D-1).
+//
+// Ab do layer: (1) in-process lock, (2) cross-instance meta CAS. Agar kisi
+// doosre server instance ne beech me version badha diya to persistAll false
+// laata hai — hum cache invalidate karke fresh data par fn DOBARA chalate
+// hain, na ki apna stale snapshot likh ke uska naya user wipe karte hain.
 const g = globalThis as unknown as { __dfa_db_lock__?: Promise<unknown> };
 
 export async function updateDb<T>(fn: (db: DbShape) => T | Promise<T>): Promise<T> {
@@ -850,41 +991,46 @@ export async function updateDb<T>(fn: (db: DbShape) => T | Promise<T>): Promise<
   await prev;
   try {
     const { metaCol, ARRAY_COLLECTIONS, META_ID } = await import("./mongo");
-    // Sasta version check — poora DB load karne ki zaroorat nahi.
-    const cur = await (await metaCol()).findOne(
-      { _id: META_ID },
-      { projection: { __v: 1 } },
-    );
-    const metaV = cur?.__v ?? 0;
-    if (!cache || cache.version !== metaV) {
-      invalidateDbCache();
-      await readDb(); // loadAll cache set karta hai
+
+    for (let attempt = 0; attempt < 4; attempt++) {
+      // Sasta version check — poora DB load karne ki zaroorat nahi.
+      const cur = await (await metaCol()).findOne(
+        { _id: META_ID },
+        { projection: { __v: 1 } },
+      );
+      const metaV = cur?.__v ?? 0;
+      if (!cache || cache.version !== metaV) {
+        invalidateDbCache();
+        await readDb(); // loadAll cache set karta hai
+      }
+      const db = cache!.db;
+      const version = cache!.version;
+
+      // fn se pehle per-collection snapshot — sirf jo badla wohi likhenge.
+      const preCols = ARRAY_COLLECTIONS.map((n) =>
+        JSON.stringify((db as Record<string, unknown>)[n] ?? []),
+      );
+      const metaSnap = () =>
+        JSON.stringify([
+          db.settings,
+          db.hiddenPincodes ?? [],
+          db.carts ?? {},
+          db.wishlists ?? {},
+        ]);
+      const preMeta = metaSnap();
+
+      const out = await fn(db);
+
+      const changedCols = ARRAY_COLLECTIONS.filter(
+        (n, i) => JSON.stringify((db as Record<string, unknown>)[n] ?? []) !== preCols[i],
+      );
+      if (changedCols.length || metaSnap() !== preMeta) {
+        const ok = await persistAll(db, version, changedCols);
+        if (!ok) continue; // conflict → cache invalidate karke fresh par dobara
+      }
+      return out;
     }
-    const db = cache!.db;
-    const version = cache!.version;
-
-    // fn se pehle per-collection snapshot — sirf jo badla wohi likhenge.
-    const preCols = ARRAY_COLLECTIONS.map((n) =>
-      JSON.stringify((db as Record<string, unknown>)[n] ?? []),
-    );
-    const metaSnap = () =>
-      JSON.stringify([
-        db.settings,
-        db.hiddenPincodes ?? [],
-        db.carts ?? {},
-        db.wishlists ?? {},
-      ]);
-    const preMeta = metaSnap();
-
-    const out = await fn(db);
-
-    const changedCols = ARRAY_COLLECTIONS.filter(
-      (n, i) => JSON.stringify((db as Record<string, unknown>)[n] ?? []) !== preCols[i],
-    );
-    if (changedCols.length || metaSnap() !== preMeta) {
-      await persistAll(db, version, changedCols);
-    }
-    return out;
+    throw new Error("updateDb: meta version conflict after 4 attempts");
   } finally {
     release();
     if (g.__dfa_db_lock__ === next) g.__dfa_db_lock__ = undefined;

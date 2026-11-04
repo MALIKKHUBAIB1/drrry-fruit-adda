@@ -16,6 +16,11 @@ const MONGO_URI: string = uri;
 let client: MongoClient | null = null;
 let dbPromise: Promise<Db> | null = null;
 
+// Optional database-name override — tests/CI ko production data se ISOLATE
+// karne ke liye. Example: MONGODB_DB=dryfruitadda_test. Unset = URI ka default
+// database (production).
+const DB_NAME = process.env.MONGODB_DB?.trim() || undefined;
+
 export function mongo(): Promise<Db> {
   if (!dbPromise) {
     client = new MongoClient(MONGO_URI, {
@@ -24,7 +29,7 @@ export function mongo(): Promise<Db> {
       serverSelectionTimeoutMS: 10_000,
       retryWrites: true,
     });
-    dbPromise = client.connect().then((c) => c.db());
+    dbPromise = client.connect().then((c) => c.db(DB_NAME));
   }
   return dbPromise;
 }
@@ -56,6 +61,29 @@ export const ARRAY_COLLECTIONS = [
 ] as const;
 
 export type ArrayCollectionName = (typeof ARRAY_COLLECTIONS)[number];
+
+// Har collection ka natural key — persist par deleteMany+insertMany ki jagah
+// keyed upsert + prune chalta hai. Delete-then-insert me ek chhota sa window
+// hota hai jisme collection KHAALI hota hai; agar us dauran koi reader (app
+// instance ya test) padhe to uske paas 0 records aate hain aur agla poora
+// write unhe wapas empty kar deta tha — isi se users wipe hote the.
+export const COLLECTION_KEYS: Record<ArrayCollectionName, string> = {
+  users: "id",
+  sessions: "token",
+  products: "slug",
+  categories: "slug",
+  hampers: "id",
+  coupons: "code",
+  pincodes: "pin",
+  orders: "id",
+  contacts: "id",
+  reviews: "id",
+  addresses: "id",
+  newsletter: "email",
+  broadcasts: "id",
+  otps: "id",
+  notifications: "id",
+};
 
 export type MetaDoc = Document & {
   _id: typeof META_ID;

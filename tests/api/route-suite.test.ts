@@ -45,10 +45,16 @@ function sessionCookieFromResponse(response: Response): string {
 let snapshot: Awaited<ReturnType<typeof readDb>>;
 
 beforeEach(async () => {
-  snapshot = await readDb();
+  // Deep clone zaroori hai: readDb() cache ka LIVE object deta hai — bina clone
+  // ke test ke mutations snapshot me hi chale jaate (restore no-op) aur writeDb
+  // dobara usi live object pe chal ke unexpected writes kar sakta tha.
+  // structuredClone Date/ObjectId ko preserve karta hai (JSON string nahi).
+  snapshot = structuredClone(await readDb());
 });
 
 afterEach(async () => {
+  // writeDb ab MONGODB_DB isolation ke bina reject hota hai (see lib/server/db.ts)
+  // — is test suite ke liye `npm test` MONGODB_DB dryfruitadda_test par chalta hai.
   await writeDb(snapshot);
 });
 

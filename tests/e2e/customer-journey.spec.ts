@@ -4,7 +4,9 @@ test("customer can browse products, login, and reach checkout", async ({ page })
   // Dev server + order POST slow ho sakta hai — budget double
   test.setTimeout(90_000);
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: /nature's finest/i })).toBeVisible();
+  // Apostrophe-agnostic: seed settings me curly ’ (U+2019) hai, production
+  // me admin-edited straight ' — dono match hone chahiye.
+  await expect(page.getByRole("heading", { name: /nature.?s finest/i })).toBeVisible();
 
   await page.goto("/shop");
   await expect(page).toHaveURL(/\/shop/);
@@ -57,5 +59,9 @@ test("customer can browse products, login, and reach checkout", async ({ page })
   await page.getByLabel("PIN code", { exact: true }).fill("560001");
   await page.getByRole("button", { name: /place order/i }).click();
 
-  await expect(page.getByText(/order placed|thank you/i)).toBeVisible();
+  // Order POST = pehli baar route compile + Atlas write — 10s me thanda dev
+  // server fail ho jata tha (order actually ban jata tha). 30s budget.
+  // .first(): success screen par h1 "Order placed!" DONO match karte hain
+  // (heading + thank-you paragraph) → strict mode violation.
+  await expect(page.getByText(/order placed|thank you/i).first()).toBeVisible({ timeout: 30_000 });
 });

@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Quality gate: typecheck -> secret scan -> security regression -> build
 set -uo pipefail
+# Tests hamesha isolated DB par — production (MONGODB_URI default db) par nahi.
+export MONGODB_DB="${MONGODB_DB:-dryfruitadda_test}"
 FAIL=0
 step() { echo; echo "=== $1 ==="; }
 step "1/4 TypeScript"; npx tsc --noEmit || FAIL=1

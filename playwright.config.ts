@@ -52,5 +52,9 @@ export default defineConfig({
         url: BASE_URL,
         reuseExistingServer: true,
         timeout: 120_000,
+        // E2E ke writes (orders, accounts) production par kabhi na jaayen.
+        // CI me yeh MONGODB_DB job env se already aata hai; local ke liye
+        // default isolated test DB. process.env merge hoti hai (playwright).
+        env: { MONGODB_DB: process.env.MONGODB_DB || "dryfruitadda_test" },
       },
 });
