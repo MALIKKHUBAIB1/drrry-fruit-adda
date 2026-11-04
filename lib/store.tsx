@@ -308,7 +308,7 @@ export const useStore = () => {
   return c;
 };
 
-export const SHIPPING_FREE_ABOVE = 999;
+export const SHIPPING_FREE_ABOVE = 0;
 // Cart par exact charge nahi pata hota (PIN zone + delivery speed decide karta hai),
 // isliye yahan sirf free-shipping threshold ka estimate dikhaya jaata hai.
 // Asli charge checkout par pincode ke hisaab se lagta hai.

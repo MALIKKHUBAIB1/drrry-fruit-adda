@@ -207,7 +207,12 @@ export function Summary({
           <BadgeCheck className="h-3.5 w-3.5 text-gold" /> Hand-sorted quality checked packs
         </li>
         <li className="flex items-center gap-1.5">
-          <Truck className="h-3.5 w-3.5 text-gold" /> Free shipping over {inr(SHIPPING_FREE_ABOVE)}
+          <Truck className="h-3.5 w-3.5 text-gold" />{" "}
+          {SHIPPING_FREE_ABOVE > 0 ? (
+            <>Free shipping over {inr(SHIPPING_FREE_ABOVE)}</>
+          ) : (
+            <>Free shipping on all orders</>
+          )}
         </li>
       </ul>
     </div>

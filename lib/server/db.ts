@@ -1061,6 +1061,6 @@ export function couponStatus(c: DbCoupon): "active" | "expired" | "disabled" | "
   return "active";
 }
 
-export const SHIPPING_FREE_ABOVE = 999;
+export const SHIPPING_FREE_ABOVE = 0;
 export const shippingFor = (net: number) =>
   net === 0 || net >= SHIPPING_FREE_ABOVE ? 0 : 79;

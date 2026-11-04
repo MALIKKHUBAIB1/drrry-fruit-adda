@@ -1,4 +1,4 @@
-export const FREE_SHIPPING_ABOVE = 999;
+export const FREE_SHIPPING_ABOVE = 0;
 
 export type Variant = { label: string; price: number; mrp: number };
 

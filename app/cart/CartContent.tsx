@@ -1,13 +1,19 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect } from "react";
 import { Heart, ShoppingBag, Trash2 } from "lucide-react";
 import { useStore } from "@/lib/store";
+import { useCatalog } from "@/lib/catalog";
 import { CartLines } from "@/components/site/CartDrawer";
 import { FreeShippingBar, Summary } from "@/components/site/CartSummary";
 
 export default function CartContent() {
   const { cart, count, clear, wishlist } = useStore();
+  const { refreshCatalog } = useCatalog();
+  useEffect(() => {
+    void refreshCatalog();
+  }, [refreshCatalog]);
   return (
     <div className="mx-auto max-w-6xl px-4 py-10 sm:py-12">
       <nav className="text-xs text-muted-foreground">

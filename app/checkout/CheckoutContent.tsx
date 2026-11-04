@@ -89,10 +89,14 @@ function Steps({ step }: { step: number }) {
 }
 
 export default function CheckoutContent() {
-  const { get: getProduct } = useCatalog();
+  const { get: getProduct, refreshCatalog } = useCatalog();
   const { cart, clear, subtotal, discount, shipping, coupon } = useStore();
   const { user, loading } = useAuth();
   const [pay, setPay] = useState("cod");
+
+  useEffect(() => {
+    void refreshCatalog();
+  }, [refreshCatalog]);
 
   const [pinInfo, setPinInfo] = useState<{
     city: string; state: string; district: string; zone: string;
